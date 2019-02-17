@@ -4,6 +4,7 @@
 
 ### TODO - COMMENTS
 ### SYMB
+### EVALUATE RETURN CODE
 
 define('types', array(
     'int',
@@ -121,6 +122,55 @@ function after_at($arg){
     }
 }
 
+#
+function process_string($string){
+    $output_string = "";
+    $tmp_string = "";
+    $state = 0;
+    for($i = 0; $i < strlen($string); $i++){
+        if($string[$i] == '\\'){
+            $tmp_string = $tmp_string . '\\';
+            $state++;
+            continue;
+        }
+        elseif($state == 0){
+            $output_string = $output_string . $string[$i];
+            $state = 0;
+        }
+
+        switch($state){
+            case 1:
+            case 2:
+                $tmp_string = $tmp_string . $string[$i];
+                $state++;
+                break;
+            case 3:
+                $tmp_string = $tmp_string . $string[$i];
+                $state = 0;
+                $real_num = substr($tmp_string, 1);
+                if(strcmp($real_num, "060") == 0){
+                    $output_string = $output_string . "&lt";
+                }
+                elseif(strcmp($real_num, "062") == 0){
+                    $output_string = $output_string . "&gt";
+                }
+                elseif(strcmp($real_num, "038") == 0){
+                    $output_string = $output_string . "&amp";
+                }
+                else{
+                    $output_string = $output_string . $tmp_string;
+                }
+                $tmp_string = "";
+                break;
+            default:
+                $tmp_string = "";
+                break;
+        }
+    }
+    print("$output_string\n");
+    return $output_string;
+}
+
 # evaluates arguments, opcodes, sorts it into the xml format
 function evaluate_arg($arg, $arg_type, $arg_num){
     if($arg_type == "symb"){
@@ -136,6 +186,7 @@ function evaluate_arg($arg, $arg_type, $arg_num){
                 return 23;
             }
             else{
+                $current_string = process_string($current_string);
                 write_arg($arg_type, $arg_num, $current_string);
                 return 0;
             }
@@ -146,15 +197,29 @@ function evaluate_arg($arg, $arg_type, $arg_num){
             }
             else{
                 write_arg($arg_type, $arg_num, $arg);
+                return 0;
             }
-            break;
-        case "var":
         case "bool":
+            $bool_value = after_at($arg);
+            if(strcmp($bool_value, "true") == 0){
+                write_arg($arg_type, $arg_num, $bool_value);
+                return 0;
+            }
+            elseif(strcmp($bool_value, "false") == 0){
+                write_arg($arg_type, $arg_num, $bool_value);
+                return 0;
+            }
+            else{
+                return 23;
+            }
         case "int":
         case "nil":
+            $after_at = after_at($arg);
+            write_arg($arg_type, $arg_num, $after_at);
+            return 0;
+        case "var":
             write_arg($arg_type, $arg_num, $arg);
             return 0;
-            break;
         default:
             return 23;
     }
@@ -180,7 +245,7 @@ function zero_args($opcode, $line){
 #
 function one_arg($opcode, $line, $arg1_type){
     # find first argument
-    $arg1_regex = "/(?<=$opcode ).*/";
+    $arg1_regex = "/(?<=$opcode )[^\s].*/";
     preg_match($arg1_regex, $line, $match);
 
     # look whether we even found it, we have to have 1 argument
@@ -193,12 +258,16 @@ function one_arg($opcode, $line, $arg1_type){
     if(has_comment($line)){
         $last_part = remove_comment($arg1, $line, $arg1);
         write_instruction_header($opcode);
-        evaluate_arg($last_part, $arg1_type, "arg1");
+        if(evaluate_arg($last_part, $arg1_type, "arg1") != 0){
+            return 23;
+        }
         xmlwriter_end_element($GLOBALS['xml']);
     }
     elseif("$opcode $arg1\n" == $line or "$opcode $arg1" == $line){
         write_instruction_header($opcode);
-        evaluate_arg($arg1, $arg1_type, "arg1");
+        if(evaluate_arg($arg1, $arg1_type, "arg1") != 0){
+            return 23;
+        }
         xmlwriter_end_element($GLOBALS['xml']);
     }
     else{
@@ -214,27 +283,42 @@ function two_args($opcode, $line, $arg1_type, $arg2_type){
     if(!$match_a){
         return 23;
     }
+    elseif(empty($match_a[0])){
+        return 23;
+    }
     $arg1 = $match_a[0];
 
     # second argument
-    $arg2_regex = "/(?<=$opcode $arg1 ).*/";
+    $arg2_regex = "/(?<=$opcode $arg1 )[^\s].*/";
     preg_match($arg2_regex, $line, $match_b);
     if(!$match_b){
         return 23;
     }
+    elseif(empty($match_b[0])){
+        return 23;
+    }
+    
     $arg2 = $match_b[0];
 
     if(has_comment($line)){
         $last_part = remove_comment($arg2, $line, $arg2);
         write_instruction_header($opcode);
-        evaluate_arg($arg1, $arg1_type, "arg1");
-        evaluate_arg($last_part, $arg2_type, "arg2");
+        if(evaluate_arg($arg1, $arg1_type, "arg1") != 0){
+            return 23;
+        }
+        if(evaluate_arg($last_part, $arg2_type, "arg2") != 0){
+            return 23;
+        }
         xmlwriter_end_element($GLOBALS['xml']);
     }
     elseif("$opcode $arg1 $arg2\n" == $line or "$opcode $arg1 $arg2" == $line){
         write_instruction_header($opcode);
-        evaluate_arg($arg1, $arg1_type, "arg1");
-        evaluate_arg($arg2, $arg2_type, "arg2");
+        if(evaluate_arg($arg1, $arg1_type, "arg1") != 0){
+            return 23;
+        }
+        if(evaluate_arg($arg2, $arg2_type, "arg2") != 0){
+            return 23;
+        }
         xmlwriter_end_element($GLOBALS['xml']);
     }
     else{
@@ -262,7 +346,7 @@ function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
     $arg2 = $match_b[0];
 
     # third argument
-    $arg3_regex = "/(?<=$opcode $arg1 $arg2 ).*/";
+    $arg3_regex = "/(?<=$opcode $arg1 $arg2 )[^\s].*/";
     preg_match($arg3_regex, $line, $match_c);
     if(!$match_c){
         return 23;
@@ -272,16 +356,28 @@ function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
     if(has_comment($line)){
         $last_part = remove_comment($arg3, $line, $arg3);
         write_instruction_header($opcode);
-        evaluate_arg($arg1, $arg1_type, "arg1");
-        evaluate_arg($arg2, $arg2_type, "arg2");
-        evaluate_arg($last_part, $arg3_type, "arg3");
+        if(evaluate_arg($arg1, $arg1_type, "arg1") != 0){
+            return 23;
+        }
+        if(evaluate_arg($arg2, $arg2_type, "arg2") != 0){
+            return 23;
+        }
+        if(evaluate_arg($last_part, $arg3_type, "arg3") != 0){
+            return 23;
+        }
         xmlwriter_end_element($GLOBALS['xml']);
     }
     elseif("$opcode $arg1 $arg2 $arg3\n" == $line or "$opcode $arg1 $arg2 $arg3" == $line){
         write_instruction_header($opcode);
-        evaluate_arg($arg1, $arg1_type, "arg1");
-        evaluate_arg($arg2, $arg2_type, "arg2");
-        evaluate_arg($arg3, $arg3_type, "arg3");
+        if(evaluate_arg($arg1, $arg1_type, "arg1") != 0){
+            return 23;
+        }
+        if(evaluate_arg($arg2, $arg2_type, "arg2") != 0){
+            return 23;
+        }
+        if(evaluate_arg($arg3, $arg3_type, "arg3") != 0){
+            return 23;
+        }
         xmlwriter_end_element($GLOBALS['xml']);
     }
     else{
@@ -398,7 +494,6 @@ function compare_opcode($opcode, $line){
         return three_args($opcode, $line, "label", "symb", "symb");
     }
     else{
-        
         return 22;
     }
     return 0;
@@ -493,5 +588,6 @@ while(($line = fgets($f)) != false){
 xmlwriter_end_element($xml);
 xmlwriter_end_document($xml);
 echo xmlwriter_output_memory($xml);
+return 0;
 
 ?>
