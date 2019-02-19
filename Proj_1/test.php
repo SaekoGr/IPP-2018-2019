@@ -19,11 +19,6 @@ function get_path($full_string){
 }
 
 #
-function set_current_directory(){
-    return getcwd();
-}
-
-#
 function print_help(){
     fwrite(STDOUT, "Script is run as: php test.php\n");
     fwrite(STDOUT, "With optional parameters:\n");
@@ -36,8 +31,109 @@ function print_help(){
     fwrite(STDOUT, "--int-only : only tests iterpreter; cannot be combined with --parse-only\n");
 }
 
+function generate_html_head(){
+    echo "<!DOCTYPE html>\n";
+    echo "<html>\n";
+
+    echo "    <head>\n";
+    echo "        <meta charset=\"UTF-8\">\n";
+    echo "        <title>IPP Projekt</title>\n";
+    echo "        <style>\n";
+
+    echo "            body{\n";
+    echo "                background-color:rgb(255, 175, 231);";
+    echo "                font-family: \"Times New Roman\", Times, serif;\n";
+    echo "            }\n";
+
+    echo "            h1{\n";
+    echo "                font-size: 42px;\n";
+    echo "                text-align: center;\n";
+    echo "                padding: 5px;\n";
+    echo "                margin-bottom: 5%;\n";
+    echo "            }\n";
+
+    echo "            h3{\n";
+    echo "                margin-bottom: 1.5%;\n";
+    echo "                line-height: 0%;\n";
+    echo "            }\n";
+
+    echo "            table, td, tr{\n";
+    echo "                border-collapse: collapse;\n";
+    echo "                width: 800px;\n";
+    echo "            }\n";
+
+    echo "            td, tr{\n";
+    echo "                text-align: left;\n";
+    echo "            }\n";
+    echo "        </style>\n";
+
+    echo "    </head>\n";
+
+    echo "        <h1>Tests for IPP Project 2018/2019</h1>\n";
+
+    $real_input = $GLOBALS['argv'];
+    echo "        <h3>Tests were run with these parameters:";
+    if(count($real_input) == 1){
+        echo " None";
+    }
+    for($i = 1; $i < count($real_input); $i++){
+        if($real_input[$i] == true){
+            echo " $real_input[$i]";
+        }
+    }
+    echo "</h3><br>\n";
+    echo "        <h3>Script run these tests:</h3>\n";
+    echo "        <table>\n";
+    echo "            <tr>\n";
+    echo "                <th>No.</th>\n";
+    echo "                <th>Path</th>\n";
+    echo "                <th>Filename</th>\n";
+    echo "                <th>Status</th>\n";
+    echo "            </tr>\n";
+}
+
+function generate_html_tail(){
+    #### eding here
+    $all_tests = $GLOBALS['total_counter'];
+    $ok_tests = $GLOBALS['passed_counter'];
+    $fail = $GLOBALS['failed_counter'];
+
+    if($all_tests > 0){
+        $success_rate = ($ok_tests / $all_tests)* 100;
+    }
+    else{
+        $success_rate = 0;
+    }
+
+    echo "        </table><br>\n";
+    echo "        <h3>Summary:</h3>\n";
+    echo "        <table style=\"width: 300px\">\n";
+    echo "            <tr>\n";
+    echo "                <td>Number of tests</td>\n";
+    echo "                <td>$all_tests</td>\n";
+    echo "            </tr>\n";
+    echo "            <tr>\n";
+    echo "                <td>Successful tests</td>\n";
+    echo "                <td>$ok_tests</td>\n";
+    echo "            </tr>\n";
+    echo "            <tr>\n";
+    echo "                <td>Failed tests</td>\n";
+    echo "                <td>$fail</td>\n";
+    echo "            </tr>\n";
+    echo "            <tr>\n";
+    echo "                <td>Success rate</td>\n";
+    echo "                <td>$success_rate%</td>\n";
+    echo "            </tr>\n";
+    echo "        </table>\n";
+    echo "    </body>\n";
+    echo "</html>\n";
+}
+
+# 
 function prepare_html(){
-    
+    generate_html_head();
+    Tests::run_tests($GLOBALS['directory_path']);
+    generate_html_tail();
 }
 
 #
@@ -52,7 +148,7 @@ $arguments = array(
     "--int-only" => false,
 );
 
-#
+# all paths
 $directory_path = "";
 $parse_script = "";
 $int_script = "";
@@ -65,16 +161,20 @@ $failed_counter = 0;
 # set my arguments
 foreach($argv as $key){
     if(substr_in_array($key, $arguments)){
-        $arguments[$key] = true;
         if(strpos($key, "--int-script=") !== false){
             $int_script = get_path($key);
+            $arguments["int-script="] = true;
         }
-        elseif(strpos($key, "--parse-script=") !== false){
+        if(strpos($key, "--parse-script=") !== false){
             $parse_script = get_path($key);
+            $arguments["parse-script="] = true;
         }
-        elseif(strpos($key, "--directory") !== false){
+        if(strpos($key, "--directory=") !== false){
             $directory_path = get_path($key);
+            $arguments["--directory="] = true;
         }
+
+        $arguments[$key] = true;
     }
     else{
         fwrite(STDERR, "Invalid argument\n");
@@ -99,18 +199,17 @@ if($arguments["--help"] == true){
     }
 }
 
-
 #set directories if empty
 if(empty($directory_path)){
-    $directory_path = set_current_directory();
+    $directory_path = getcwd();
 }
 
 if(empty($parse_script)){
-    $parse_script = set_current_directory() . "/parse.php";
+    $parse_script = getcwd() . "/parse.php";
 }
 
 if(empty($int_script)){
-    $int_script = set_current_directory() . "/interpret.py";
+    $int_script = getcwd() . "/interpret.py";
 }
 
 # check their existence
@@ -128,6 +227,113 @@ if(!file_exists($int_script)){
     fwrite(STDERR, "$int_script doesn't exist\n");
     return 11;
 }
+
+prepare_html();
+
+class Tests{
+    public static function run_tests($directory_path){
+        $arguments = $GLOBALS['arguments'];
+        
+
+        $dir_handle = opendir($directory_path);
+        
+        while($current_file = readdir($dir_handle)){
+            $tmp_argv = $GLOBALS['arguments']; # TODO
+            #echo "$current_file\n";
+            # just skip the . and .. files
+            if($current_file == "." or $current_file == ".."){
+                continue;
+            }
+            
+            #echo "$directory_path . "/" . $current_file";
+            if(is_dir("$directory_path" . "/" . "$current_file") and $arguments['--recursive']){
+                self::run_tests("$directory_path" . "/" . "$current_file");
+            }
+            elseif(is_file("$directory_path" . "/" . "$current_file")){
+                
+                $full_path = "$directory_path" . "/" . "$current_file";
+                $extension = pathinfo($full_path, PATHINFO_EXTENSION);
+                if($extension == "src"){
+                    #print("We found our file, yay!!! $full_path\n");
+                    self::prepare_files(pathinfo($full_path, PATHINFO_FILENAME), $directory_path);
+                    self::run_test($directory_path, pathinfo($full_path, PATHINFO_FILENAME), $tmp_argv['--parse-only'], $tmp_argv['--int-only']);
+                }
+            }
+        }
+    }
+
+    public static function prepare_files($file_name, $directory_path){
+        if(!file_exists("$directory_path" . "/" . "$file_name" . ".in")){ # .in file
+            touch("$directory_path" . "/" . "$file_name" . ".in");
+        }
+        if(!file_exists("$directory_path" . "/" . "$file_name" . ".out")){
+            touch("$directory_path" . "/" . "$file_name" . ".out");
+        }
+        if(!file_exists("$directory_path" . "/" . "$file_name" . ".rc")){
+            touch("$directory_path" . "/" . "$file_name" . ".rc");
+            exec('echo "0" >' . "$directory_path" . "/" . "$file_name" . ".rc");
+        }
+    }
+
+    public static function run_test($directory_path, $file, $parse_only, $int_only){
+        $GLOBALS['total_counter']++;
+        $test_num = $GLOBALS['total_counter'];
+        $exit_array = "";
+        $exit_code = -1;
+
+        # get expected return code
+        $f = fopen($directory_path . "/" . $file . ".rc", 'r');
+        $expected_rc = fgets($f);
+        fclose($f);
+
+        if($parse_only){    # we test only parser
+            #echo 'php ' . $GLOBALS['parse_script'] . ' < ' . $directory_path . '/' . $file . '.src' . ' > ' . 'tmp_output_test' . '\n';
+            exec('php ' . $GLOBALS['parse_script'] . ' < ' . $directory_path . '/' . $file . '.src > tmp_output_test', $exit_array, $exit_code); ### !!!!!!!!!!!! PHPHP VERSION
+        }
+        elseif($int_only){  # we test only interpreter
+            exec('python ' . $GLOBALS['int_script'] . '--source=' . $file . '.src input=' . $file . '.in > tmp_output_test', $exit_array, $exit_code); #### PYTHON VERSION
+        }
+        else{               # testing both
+            exec('php ' . $GLOBALS['parse_script'] . ' < ' . $directory_path . '/' . $file . '.src > tmp_output_test_php', $exit_array, $exit_code); ### !!!!!!!!!!!! PHPHP VERSION
+            exec('python ' . $GLOBALS['int_script'] . ' --source=tmp_output_test_php input=' . $file . '.in > tmp_output_test', $exit_array, $exit_code); #### PYTHON VERSION
+            exec('rm -f tmp_output_test_php');
+        }
+
+        # compare exit codes
+        if($exit_code == $expected_rc){
+            exec('diff tmp_output_test ' . $directory_path . '/' . $file . '.out > diff_tmp_output');
+            if(0 == filesize("diff_tmp_output")){
+                $GLOBALS['passed_counter']++;
+                self::test_result($test_num, $directory_path . "/" . $file, $file, true);
+            }
+            else{
+                $GLOBALS['failed_counter']++;
+                self::test_result($test_num, $directory_path . "/" . $file, $file, false);
+            }
+            exec('rm -f diff_tmp_output');
+        }
+        else{
+            $GLOBALS['failed_counter']++;
+            self::test_result($test_num, $directory_path . "/" . $file, $file, false);
+        }
+        exec('rm -f tmp_output_test');
+    }
+
+    public static function test_result($num, $path, $file, $result){
+        echo "            <tr>\n";
+        echo "                <td>$num</td>\n";
+        echo "                <td>$path</td>\n";
+        echo "                <td>$file</td>\n";
+        if($result){    # success
+            echo "                <td style=\"color:green\">pass</td>\n";
+        }
+        else{           # fail
+            echo "                <td style=\"color:red\">fail</td>\n";
+        }
+        echo "            </tr>\n";
+    }
+}
+
 
 #var_dump($arguments);
 #echo "Directory path is $directory_path\n";

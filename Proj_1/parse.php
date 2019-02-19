@@ -53,7 +53,7 @@ function remove_comment($first_part, $line, $remove_from){
     preg_match($comment_regex, $remove_from, $match);
     $is_ok = false;
     if(!$match){
-        return 23;
+        exit(23);
     }
     $before_comment = $match[0];
 
@@ -118,56 +118,27 @@ function after_at($arg){
         return $match[0];
     }
     else{
-        return 23;
+        exit(23);
     }
 }
 
-#
+# removes <, >, & and replaces it with XML appropriate symbol
 function process_string($string){
     $output_string = "";
-    $tmp_string = "";
-    $state = 0;
     for($i = 0; $i < strlen($string); $i++){
-        if($string[$i] == '\\'){
-            $tmp_string = $tmp_string . '\\';
-            $state++;
-            continue;
+        if($string[$i] == ">"){
+            $output_string = $output_string . "&gt";
         }
-        elseif($state == 0){
+        elseif($string[$i] == "<"){
+            $output_string = $output_string . "&lt";
+        }
+        elseif($string[$i] == "&"){
+            $output_string = $output_string . "&amp";
+        }
+        else{
             $output_string = $output_string . $string[$i];
-            $state = 0;
-        }
-
-        switch($state){
-            case 1:
-            case 2:
-                $tmp_string = $tmp_string . $string[$i];
-                $state++;
-                break;
-            case 3:
-                $tmp_string = $tmp_string . $string[$i];
-                $state = 0;
-                $real_num = substr($tmp_string, 1);
-                if(strcmp($real_num, "060") == 0){
-                    $output_string = $output_string . "&lt";
-                }
-                elseif(strcmp($real_num, "062") == 0){
-                    $output_string = $output_string . "&gt";
-                }
-                elseif(strcmp($real_num, "038") == 0){
-                    $output_string = $output_string . "&amp";
-                }
-                else{
-                    $output_string = $output_string . $tmp_string;
-                }
-                $tmp_string = "";
-                break;
-            default:
-                $tmp_string = "";
-                break;
         }
     }
-    print("$output_string\n");
     return $output_string;
 }
 
@@ -176,14 +147,14 @@ function evaluate_arg($arg, $arg_type, $arg_num){
     if($arg_type == "symb"){
         $arg_type = get_type($arg);
         if($arg_type == "error"){
-            return 23;
+            exit(23);
         }
     }
     switch($arg_type){
         case "string":
             $current_string = after_at($arg);
             if($current_string == 23){
-                return 23;
+                exit(23);
             }
             else{
                 $current_string = process_string($current_string);
@@ -193,7 +164,7 @@ function evaluate_arg($arg, $arg_type, $arg_num){
         case "label":   # no
         case "type":
             if(has_at($arg)){
-                return 23;
+                exit(23);
             }
             else{
                 write_arg($arg_type, $arg_num, $arg);
@@ -210,7 +181,7 @@ function evaluate_arg($arg, $arg_type, $arg_num){
                 return 0;
             }
             else{
-                return 23;
+                exit(23);
             }
         case "int":
         case "nil":
@@ -218,10 +189,11 @@ function evaluate_arg($arg, $arg_type, $arg_num){
             write_arg($arg_type, $arg_num, $after_at);
             return 0;
         case "var":
+            $arg = process_string($arg);
             write_arg($arg_type, $arg_num, $arg);
             return 0;
         default:
-            return 23;
+            exit(23);
     }
 }
 
@@ -238,7 +210,7 @@ function zero_args($opcode, $line){
         return 0;
     }
     else{
-        return 23;
+        exit(23);
     }
 }
 
@@ -250,7 +222,7 @@ function one_arg($opcode, $line, $arg1_type){
 
     # look whether we even found it, we have to have 1 argument
     if(!$match){
-        return 23;
+        exit(23);
     }
     $arg1 = $match[0];
 
@@ -259,19 +231,19 @@ function one_arg($opcode, $line, $arg1_type){
         $last_part = remove_comment($arg1, $line, $arg1);
         write_instruction_header($opcode);
         if(evaluate_arg($last_part, $arg1_type, "arg1") != 0){
-            return 23;
+            exit(23);
         }
         xmlwriter_end_element($GLOBALS['xml']);
     }
     elseif("$opcode $arg1\n" == $line or "$opcode $arg1" == $line){
         write_instruction_header($opcode);
         if(evaluate_arg($arg1, $arg1_type, "arg1") != 0){
-            return 23;
+            exit(23);
         }
         xmlwriter_end_element($GLOBALS['xml']);
     }
     else{
-        return 23;
+        exit(23);
     }
 }
 
@@ -281,10 +253,10 @@ function two_args($opcode, $line, $arg1_type, $arg2_type){
     $arg1_regex = "/(?<=$opcode ).*?(?= )/";
     preg_match($arg1_regex, $line, $match_a);
     if(!$match_a){
-        return 23;
+        exit(23);
     }
     elseif(empty($match_a[0])){
-        return 23;
+        exit(23);
     }
     $arg1 = $match_a[0];
 
@@ -292,10 +264,10 @@ function two_args($opcode, $line, $arg1_type, $arg2_type){
     $arg2_regex = "/(?<=$opcode $arg1 )[^\s].*/";
     preg_match($arg2_regex, $line, $match_b);
     if(!$match_b){
-        return 23;
+        exit(23);
     }
     elseif(empty($match_b[0])){
-        return 23;
+        exit(23);
     }
     
     $arg2 = $match_b[0];
@@ -304,25 +276,25 @@ function two_args($opcode, $line, $arg1_type, $arg2_type){
         $last_part = remove_comment($arg2, $line, $arg2);
         write_instruction_header($opcode);
         if(evaluate_arg($arg1, $arg1_type, "arg1") != 0){
-            return 23;
+            exit(23);
         }
         if(evaluate_arg($last_part, $arg2_type, "arg2") != 0){
-            return 23;
+            exit(23);
         }
         xmlwriter_end_element($GLOBALS['xml']);
     }
     elseif("$opcode $arg1 $arg2\n" == $line or "$opcode $arg1 $arg2" == $line){
         write_instruction_header($opcode);
         if(evaluate_arg($arg1, $arg1_type, "arg1") != 0){
-            return 23;
+            exit(23);
         }
         if(evaluate_arg($arg2, $arg2_type, "arg2") != 0){
-            return 23;
+            exit(23);
         }
         xmlwriter_end_element($GLOBALS['xml']);
     }
     else{
-        return 23;
+        exit(23);
     }
 }
 
@@ -333,7 +305,7 @@ function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
     preg_match($arg1_regex, $line, $match_a);
 
     if(!$match_a){
-        return 23;
+        exit(23);
     }
     $arg1 = $match_a[0];
 
@@ -341,7 +313,7 @@ function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
     $arg2_regex = "/(?<=$opcode $arg1 ).*?(?= )/";
     preg_match($arg2_regex, $line, $match_b);
     if(!$match_b){
-        return 23;
+        exit(23);
     }
     $arg2 = $match_b[0];
 
@@ -349,7 +321,7 @@ function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
     $arg3_regex = "/(?<=$opcode $arg1 $arg2 )[^\s].*/";
     preg_match($arg3_regex, $line, $match_c);
     if(!$match_c){
-        return 23;
+        exit(23);
     }
     $arg3 = $match_c[0];
 
@@ -357,31 +329,31 @@ function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
         $last_part = remove_comment($arg3, $line, $arg3);
         write_instruction_header($opcode);
         if(evaluate_arg($arg1, $arg1_type, "arg1") != 0){
-            return 23;
+            exit(23);
         }
         if(evaluate_arg($arg2, $arg2_type, "arg2") != 0){
-            return 23;
+            exit(23);
         }
         if(evaluate_arg($last_part, $arg3_type, "arg3") != 0){
-            return 23;
+            exit(23);
         }
         xmlwriter_end_element($GLOBALS['xml']);
     }
     elseif("$opcode $arg1 $arg2 $arg3\n" == $line or "$opcode $arg1 $arg2 $arg3" == $line){
         write_instruction_header($opcode);
         if(evaluate_arg($arg1, $arg1_type, "arg1") != 0){
-            return 23;
+            exit(23);
         }
         if(evaluate_arg($arg2, $arg2_type, "arg2") != 0){
-            return 23;
+            exit(23);
         }
         if(evaluate_arg($arg3, $arg3_type, "arg3") != 0){
-            return 23;
+            exit(23);
         }
         xmlwriter_end_element($GLOBALS['xml']);
     }
     else{
-        return 23;
+        exit(23);
     }
 }
 
@@ -494,7 +466,8 @@ function compare_opcode($opcode, $line){
         return three_args($opcode, $line, "label", "symb", "symb");
     }
     else{
-        return 22;
+        print("A toto som ja\n");
+        exit(22);
     }
     return 0;
 }
@@ -514,10 +487,32 @@ function is_one_line_comment($line){
     }
 }
 
+#
+function check_whitespaces($line){
+    for($i = 0; $i < strlen($line); $i++){
+        switch($line[$i]){
+            case "\t":
+            case "\s":
+            case "\n":
+                break;
+            default:
+                return false;
+            
+        }
+    }
+    return true;
+}
+
 # processes each line
 function process_line($line){
     # check for one line comment
     if(is_one_line_comment($line)){
+        return 0;
+    }
+    elseif($line == "\n" or $line == "\s" or $line == "\t"){
+        return 0;
+    }
+    elseif(check_whitespaces($line)){
         return 0;
     }
 
@@ -542,18 +537,18 @@ function print_help(){
 if($argc == 1){                 # no arguments, wait for stdin
     $f = fopen('php://stdin', 'r');
     if(!$f){
-        fwrite(STDERR, "Error opening file\n");
+        #fwrite(STDERR, "Error opening file\n");
     }
 }
 elseif($argv[1] === "--help"){   # help argument
     if($argc != 2)  
-        return 10;
+        exit(10);
     else
-        return print_help();
+        exit(print_help());
 }
 else{
-    fwrite(STDERR, "Invalid arguments\n");
-    return 10;
+    #fwrite(STDERR, "Invalid arguments\n");
+    exit(10);
 }
 
 # check the header
@@ -563,7 +558,7 @@ if($fh == ".IPPcode19\n"){
 }
 else{
     fwrite(STDERR, "Header is missing or incorrect\n");
-    return 21;
+    exit(21);
 }
 
 # prepare xml document
@@ -573,14 +568,16 @@ $instruction_counter = 1;
 
 # reading line by line and processing it
 while(($line = fgets($f)) != false){
+    
     $ret_code = process_line($line);
+
     if($ret_code == 22){
         fwrite(STDERR, "Incorrect or uknown opcode\n");
-        return $ret_code;
+        exit($ret_code);
     }
     elseif($ret_code == 23){
         fwrite(STDERR, "Lexical or syntactical error\n");
-        return $ret_code;
+        exit($ret_code);
     }
 }
 
@@ -588,6 +585,6 @@ while(($line = fgets($f)) != false){
 xmlwriter_end_element($xml);
 xmlwriter_end_document($xml);
 echo xmlwriter_output_memory($xml);
-return 0;
+exit(0);
 
 ?>
