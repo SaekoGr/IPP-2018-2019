@@ -192,6 +192,17 @@ function zero_args($opcode, $line){
     }
 }
 
+function get_next_arg($word, $line){
+    $arg_regex = "/(?<=$word\s)[^\s#].*?/";
+    preg_match($arg_regex, $line, $match);
+    if(!$match){
+        return "";
+    }
+    else{
+        return $match[0];
+    }
+}
+
 #
 function one_arg($opcode, $line, $arg1_type){
     echo "Som tu\n";
@@ -204,7 +215,8 @@ function one_arg($opcode, $line, $arg1_type){
     if(!$match){
         exit(23);
     }
-    $arg1 = $match[0];
+    $arg1 = get_next_arg($opcode, $line);
+    echo "$arg1\n";
 
     # check whether it matches
     if(has_comment($line)){
