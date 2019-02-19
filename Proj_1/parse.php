@@ -122,26 +122,6 @@ function after_at($arg){
     }
 }
 
-# removes <, >, & and replaces it with XML appropriate symbol
-function process_string($string){
-    $output_string = "";
-    for($i = 0; $i < strlen($string); $i++){
-        if($string[$i] == ">"){
-            $output_string = $output_string . "&gt";
-        }
-        elseif($string[$i] == "<"){
-            $output_string = $output_string . "&lt";
-        }
-        elseif($string[$i] == "&"){
-            $output_string = $output_string . "&amp";
-        }
-        else{
-            $output_string = $output_string . $string[$i];
-        }
-    }
-    return $output_string;
-}
-
 # evaluates arguments, opcodes, sorts it into the xml format
 function evaluate_arg($arg, $arg_type, $arg_num){
     if($arg_type == "symb"){
@@ -157,7 +137,6 @@ function evaluate_arg($arg, $arg_type, $arg_num){
                 exit(23);
             }
             else{
-                $current_string = process_string($current_string);
                 write_arg($arg_type, $arg_num, $current_string);
                 return 0;
             }
@@ -189,7 +168,6 @@ function evaluate_arg($arg, $arg_type, $arg_num){
             write_arg($arg_type, $arg_num, $after_at);
             return 0;
         case "var":
-            $arg = process_string($arg);
             write_arg($arg_type, $arg_num, $arg);
             return 0;
         default:
@@ -216,9 +194,11 @@ function zero_args($opcode, $line){
 
 #
 function one_arg($opcode, $line, $arg1_type){
+    echo "Som tu\n";
     # find first argument
-    $arg1_regex = "/(?<=$opcode )[^\s].*/";
+    $arg1_regex = "/(?<=$opcode\s)[^\s].*/";
     preg_match($arg1_regex, $line, $match);
+    print_r($match);
 
     # look whether we even found it, we have to have 1 argument
     if(!$match){
@@ -359,7 +339,6 @@ function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
 
 #
 function compare_opcode($opcode, $line){
-    $found = False;
     if(!strcasecmp($opcode, "CREATEFRAME")){        # 0
         return zero_args($opcode, $line);
     }
@@ -466,7 +445,7 @@ function compare_opcode($opcode, $line){
         return three_args($opcode, $line, "label", "symb", "symb");
     }
     else{
-        print("A toto som ja\n");
+        print("Zly opcode\n");
         exit(22);
     }
     return 0;
@@ -489,7 +468,8 @@ function is_one_line_comment($line){
 
 #
 function check_whitespaces($line){
-    for($i = 0; $i < strlen($line); $i++){
+    $size_line = strlen($line);
+    for($i = 0; $i < $size_line; $i++){
         switch($line[$i]){
             case "\t":
             case "\s":
@@ -497,7 +477,6 @@ function check_whitespaces($line){
                 break;
             default:
                 return false;
-            
         }
     }
     return true;
@@ -509,16 +488,17 @@ function process_line($line){
     if(is_one_line_comment($line)){
         return 0;
     }
-    elseif($line == "\n" or $line == "\s" or $line == "\t"){
+    if($line == "\n" or $line == "\s" or $line == "\t"){
         return 0;
     }
-    elseif(check_whitespaces($line)){
+    if(check_whitespaces($line)){
         return 0;
     }
 
-    $opcode_regex = "/^[a-zA-Z]*/";
+    $opcode_regex = "/^[\s]*([a-zA-Z]*)/";
     preg_match($opcode_regex, $line, $match);
-    $opcode = $match[0];
+    
+    $opcode = $match[count($match)-1];
     return compare_opcode($opcode, $line);
 
 }
