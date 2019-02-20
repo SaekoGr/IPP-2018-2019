@@ -16,6 +16,16 @@ define('types', array(
     'var'
 ));
 
+#
+function substr_in_array($needle, array $haystack){
+    foreach($haystack as $item){
+        if(false !== strpos($item, $needle)){
+            return true;
+        }
+    }
+    return false;
+}
+
 # prepares xml document
 function prepare_document($xml){
     xmlwriter_set_indent($xml, 1);
@@ -63,7 +73,7 @@ function get_type($arg){
     $type_regex = "/.*(?=@)/";
     preg_match($type_regex, $arg, $match);
     if(!$match){
-        return "error";
+        exit(23);
     }
     $type = $match[0];
 
@@ -76,7 +86,7 @@ function get_type($arg){
                 return "$type";
             }
         }
-        return "error";
+        exit(23);
     }
 }
 
@@ -156,7 +166,7 @@ function evaluate_arg($arg, $arg_type, $arg_num){
 
 
 
-function remove_comment_new($word){
+function remove_comment($word){
     if(has_comment($word)){
         $before_comment = "/.*(?=#)/";
         preg_match($before_comment, $word, $match);
@@ -196,7 +206,6 @@ function zero_args($opcode, $line){
 function get_next_arg($word, $line){
     $arg_regex = "/(?<=$word\s).*?(?=\s)/";
     preg_match($arg_regex, $line, $match);
-    print_r($match);
     if(!$match or empty($match)){
         return "";
     }
@@ -207,7 +216,22 @@ function get_next_arg($word, $line){
 
 #
 function one_arg($opcode, $line, $arg1_type){
-    $arg1 = remove_comment_new(get_next_arg($opcode, $line));
+    $arg1 = remove_comment(get_next_arg($opcode, $line));
+
+    if($arg1 == ""){
+        exit(23);
+    }
+
+    if(!strcasecmp($opcode, "JUMP") and $GLOBALS['stats'] and $GLOBALS['jumps']){
+        $GLOBALS['jump_counter']++;
+    }
+
+    if(!strcasecmp($opcode, "LABEL") and $GLOBALS['stats'] and $GLOBALS['jumps']){
+        if(!in_array($arg1, $GLOBALS['label_array'])){
+            array_push($GLOBALS['label_array'], $arg1);
+            $GLOBALS['label_counter']++;
+        }
+    }
 
     if(get_next_arg($arg1, $line) == ""){
         write_instruction_header($opcode);
@@ -224,8 +248,12 @@ function two_args($opcode, $line, $arg1_type, $arg2_type){
     $tmp_state = "";
     $arg1 = get_next_arg($opcode, $line);
     $tmp_state = get_current_state($opcode, $arg1, $line);
-    $arg2 = remove_comment_new(get_next_arg($arg1, $line));
+    $arg2 = remove_comment(get_next_arg($arg1, $line));
     $tmp_state = get_current_state($tmp_state, $arg2, $line);
+
+    if($arg1 == "" or $arg2 == ""){
+        exit(23);
+    }
 
     if(get_next_arg($tmp_state, $line) == ""){
         write_instruction_header($opcode);
@@ -244,8 +272,6 @@ function two_args($opcode, $line, $arg1_type, $arg2_type){
 function get_current_state($word_1, $word_2, $line){
     $basic_regex = "/$word_1\s*$word_2/";
     preg_match($basic_regex, $line, $match);
-    print("tu ešte som\n");
-    print_r($match);
     if(!$match or empty($match)){
         exit(23);
     }
@@ -261,8 +287,19 @@ function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
     $tmp_state = get_current_state($opcode, $arg1, $line);
     $arg2 = get_next_arg($tmp_state, $line);
     $tmp_state = get_current_state($tmp_state, $arg2, $line);
-    $arg3 = remove_comment_new(get_next_arg($tmp_state, $line));
+    $arg3 = remove_comment(get_next_arg($tmp_state, $line));
     $tmp_state = get_current_state($tmp_state, $arg3, $line);
+
+    if($arg1 == "" or $arg2 == "" or $arg3 == ""){
+        exit(23);
+    }
+
+    if(!strcasecmp($opcode, "JUMPIFEQ") and $GLOBALS['stats'] and $GLOBALS['jumps']){
+        $GLOBALS['jump_counter']++;
+    }
+    if(!strcasecmp($opcode, "JUMPIFNEQ") and $GLOBALS['stats'] and $GLOBALS['jumps']){
+        $GLOBALS['jump_counter']++;
+    }
 
     if(get_next_arg($tmp_state, $line) == ""){
             write_instruction_header($opcode);
@@ -384,7 +421,6 @@ function compare_opcode($opcode, $line){
         return three_args($opcode, $line, "label", "symb", "symb");
     }
     else{
-        print("Zly opcode\n");
         exit(22);
     }
     return 0;
@@ -398,6 +434,9 @@ function is_one_line_comment($line){
         return false;
     }
     elseif("$match[0]" == "$line" or "$match[0]\n" == "$line"){
+        if($GLOBALS['stats'] and $GLOBALS['comments']){
+            $GLOBALS['comment_counter']++;
+        }
         return true;
     }
     else{
@@ -445,19 +484,37 @@ function process_line($line){
 # functions for help
 function print_help(){
     fwrite(STDOUT, "Usage: php7.3 parse.php < file\n");
-    return 0;
+    exit(0);
+}
+
+function get_path($full_string){
+    $path_regex = "/(?<==).*/";
+    preg_match($path_regex, $full_string, $match);
+    return $match[0];
 }
 
 #                           #
 #           MAIN            #
 #                           #
 
+$stats = false;
+$loc = false;
+$comments = false;
+$labels = false;
+$jumps = false;
+$stats_path = "";
+
+$loc_counter = 0;
+$comment_counter = 0;
+$label_counter = 0;
+$jump_counter = 0;
+
+$stats_array = [];
+$label_array = [];
+
 # parsing the input arguments
 if($argc == 1){                 # no arguments, wait for stdin
-    $f = fopen('php://stdin', 'r');
-    if(!$f){
-        #fwrite(STDERR, "Error opening file\n");
-    }
+    ;
 }
 elseif($argv[1] === "--help"){   # help argument
     if($argc != 2)  
@@ -466,8 +523,46 @@ elseif($argv[1] === "--help"){   # help argument
         exit(print_help());
 }
 else{
-    #fwrite(STDERR, "Invalid arguments\n");
-    exit(10);
+    if(substr_in_array("--stats=", $argv)){
+        foreach($argv as $item){
+            if(strpos($item, "--stats=") !== false){
+                $stats = true;
+                $stats_path = get_path($item);
+            }
+            elseif(strpos($item, "--loc") !== false){
+                array_push($stats_array, "--loc");
+                $loc = true;
+            }
+            elseif(strpos($item, "--comments") !== false){
+                
+                array_push($stats_array, "--comments");
+                $comments = true;
+            }
+            elseif(strpos($item, "--labels") !== false){
+                array_push($stats_array, "--labels");
+                $labels = true;
+            }
+            elseif(strpos($item, "--jumps") !== false){
+                array_push($stats_array, "--jumps");
+                $jumps = true;
+            }
+            elseif(strpos($item, "parse.php") !== false){
+                continue;
+            }
+            else{
+                exit(10);
+            }
+        }
+    }
+    else{
+        #fwrite(STDERR, "Invalid arguments\n");
+        exit(10);
+    }
+}
+
+$f = fopen('php://stdin', 'r');
+    if(!$f){
+        #fwrite(STDERR, "Error opening file\n");
 }
 
 # check the header
@@ -498,6 +593,30 @@ while(($line = fgets($f)) != false){
         fwrite(STDERR, "Lexical or syntactical error\n");
         exit($ret_code);
     }
+}
+
+if($stats){
+    $st = fopen($stats_path, 'w');
+    foreach($stats_array as $item){
+        if(strpos($item, "--loc") !== false){
+            $loc_counter = ($instruction_counter - 1);
+            fwrite($st, $GLOBALS['loc_counter'] . "\n");
+        }
+        elseif(strpos($item, "--comments") !== false){
+            fwrite($st, $GLOBALS['comment_counter'] . "\n");
+        }
+        elseif(strpos($item, "--labels") !== false){
+            fwrite($st, $GLOBALS['label_counter'] . "\n");
+        }
+        elseif(strpos($item, "--jumps") !== false){
+            fwrite($st, $GLOBALS['jump_counter']. "\n");
+        }
+        else{
+            print("Error\n");
+            exit(23);
+        }
+    }
+    fclose($st);
 }
 
 # close xml document
