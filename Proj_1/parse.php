@@ -48,26 +48,6 @@ function has_comment($line){
     }
 }
 
-function remove_comment($first_part, $line, $remove_from){
-    $comment_regex = "/.*(?=#.*)/";
-    preg_match($comment_regex, $remove_from, $match);
-    $is_ok = false;
-    if(!$match){
-        exit(23);
-    }
-    $before_comment = $match[0];
-
-    while(!$is_ok){
-        if($before_comment[strlen($before_comment) - 1] == " " or $before_comment[strlen($before_comment) - 1] == "\t"){
-            $before_comment = substr($before_comment, 0, -1);
-        }
-        else{
-            $is_ok = true;
-        }
-    }
-    return $before_comment;
-}
-
 # writes argument
 function write_arg($type, $arg_num, $arg){
     xmlwriter_start_element($GLOBALS['xml'], $arg_num);
@@ -138,8 +118,8 @@ function evaluate_arg($arg, $arg_type, $arg_num){
             }
             else{
                 write_arg($arg_type, $arg_num, $current_string);
-                return 0;
             }
+            break;
         case "label":   # no
         case "type":
             if(has_at($arg)){
@@ -147,91 +127,91 @@ function evaluate_arg($arg, $arg_type, $arg_num){
             }
             else{
                 write_arg($arg_type, $arg_num, $arg);
-                return 0;
             }
+            break;
         case "bool":
             $bool_value = after_at($arg);
             if(strcmp($bool_value, "true") == 0){
                 write_arg($arg_type, $arg_num, $bool_value);
-                return 0;
             }
             elseif(strcmp($bool_value, "false") == 0){
                 write_arg($arg_type, $arg_num, $bool_value);
-                return 0;
             }
             else{
                 exit(23);
             }
+            break;
         case "int":
         case "nil":
             $after_at = after_at($arg);
             write_arg($arg_type, $arg_num, $after_at);
-            return 0;
+            break;
         case "var":
             write_arg($arg_type, $arg_num, $arg);
-            return 0;
+            break;
         default:
             exit(23);
     }
 }
 
+
+
+function remove_comment_new($word){
+    if(has_comment($word)){
+        $before_comment = "/.*(?=#)/";
+        preg_match($before_comment, $word, $match);
+        return $match[0];
+    }
+    else{
+        return $word;
+    }
+}
+
+#
+function remove_whitespaces($word){
+    $tmp_word = "";
+    for($i = 0; $i < strlen($word); $i++){
+        if($word[$i] == "\s" or $word[$i] == "\t" or $word[$i] == " " or is_one_line_comment($word)){
+            continue;
+        }
+        $tmp_word = $tmp_word . $word[$i];
+    }
+    return $tmp_word;
+}
+
+
+
 # instruction has no arguments
 function zero_args($opcode, $line){
-    if(has_comment($line)){
-        $last_part = remove_comment($opcode, $line, $line);
-        write_instruction_header($last_part);
-        xmlwriter_end_element($GLOBALS['xml']);
-    }
-    elseif("$opcode\n" == $line or "$opcode" == $line){
+    if(get_next_arg($opcode, $line) == ""){
         write_instruction_header($opcode);
         xmlwriter_end_element($GLOBALS['xml']);
-        return 0;
     }
     else{
         exit(23);
     }
 }
 
+#
 function get_next_arg($word, $line){
-    $arg_regex = "/(?<=$word\s)[^\s#].*?/";
+    $arg_regex = "/(?<=$word\s).*?(?=\s)/";
     preg_match($arg_regex, $line, $match);
-    if(!$match){
+    print_r($match);
+    if(!$match or empty($match)){
         return "";
     }
     else{
-        return $match[0];
+        return remove_whitespaces($match[0]);
     }
 }
 
 #
 function one_arg($opcode, $line, $arg1_type){
-    echo "Som tu\n";
-    # find first argument
-    $arg1_regex = "/(?<=$opcode\s)[^\s].*/";
-    preg_match($arg1_regex, $line, $match);
-    print_r($match);
+    $arg1 = remove_comment_new(get_next_arg($opcode, $line));
 
-    # look whether we even found it, we have to have 1 argument
-    if(!$match){
-        exit(23);
-    }
-    $arg1 = get_next_arg($opcode, $line);
-    echo "$arg1\n";
-
-    # check whether it matches
-    if(has_comment($line)){
-        $last_part = remove_comment($arg1, $line, $arg1);
+    if(get_next_arg($arg1, $line) == ""){
         write_instruction_header($opcode);
-        if(evaluate_arg($last_part, $arg1_type, "arg1") != 0){
-            exit(23);
-        }
-        xmlwriter_end_element($GLOBALS['xml']);
-    }
-    elseif("$opcode $arg1\n" == $line or "$opcode $arg1" == $line){
-        write_instruction_header($opcode);
-        if(evaluate_arg($arg1, $arg1_type, "arg1") != 0){
-            exit(23);
-        }
+        evaluate_arg($arg1, $arg1_type, "arg1");
         xmlwriter_end_element($GLOBALS['xml']);
     }
     else{
@@ -241,48 +221,16 @@ function one_arg($opcode, $line, $arg1_type){
 
 #
 function two_args($opcode, $line, $arg1_type, $arg2_type){
-    # first argument
-    $arg1_regex = "/(?<=$opcode ).*?(?= )/";
-    preg_match($arg1_regex, $line, $match_a);
-    if(!$match_a){
-        exit(23);
-    }
-    elseif(empty($match_a[0])){
-        exit(23);
-    }
-    $arg1 = $match_a[0];
+    $tmp_state = "";
+    $arg1 = get_next_arg($opcode, $line);
+    $tmp_state = get_current_state($opcode, $arg1, $line);
+    $arg2 = remove_comment_new(get_next_arg($arg1, $line));
+    $tmp_state = get_current_state($tmp_state, $arg2, $line);
 
-    # second argument
-    $arg2_regex = "/(?<=$opcode $arg1 )[^\s].*/";
-    preg_match($arg2_regex, $line, $match_b);
-    if(!$match_b){
-        exit(23);
-    }
-    elseif(empty($match_b[0])){
-        exit(23);
-    }
-    
-    $arg2 = $match_b[0];
-
-    if(has_comment($line)){
-        $last_part = remove_comment($arg2, $line, $arg2);
+    if(get_next_arg($tmp_state, $line) == ""){
         write_instruction_header($opcode);
-        if(evaluate_arg($arg1, $arg1_type, "arg1") != 0){
-            exit(23);
-        }
-        if(evaluate_arg($last_part, $arg2_type, "arg2") != 0){
-            exit(23);
-        }
-        xmlwriter_end_element($GLOBALS['xml']);
-    }
-    elseif("$opcode $arg1 $arg2\n" == $line or "$opcode $arg1 $arg2" == $line){
-        write_instruction_header($opcode);
-        if(evaluate_arg($arg1, $arg1_type, "arg1") != 0){
-            exit(23);
-        }
-        if(evaluate_arg($arg2, $arg2_type, "arg2") != 0){
-            exit(23);
-        }
+        evaluate_arg($arg1, $arg1_type, "arg1");
+        evaluate_arg($arg2, $arg2_type, "arg2");
         xmlwriter_end_element($GLOBALS['xml']);
     }
     else{
@@ -290,59 +238,38 @@ function two_args($opcode, $line, $arg1_type, $arg2_type){
     }
 }
 
+
+
+#
+function get_current_state($word_1, $word_2, $line){
+    $basic_regex = "/$word_1\s*$word_2/";
+    preg_match($basic_regex, $line, $match);
+    print("tu ešte som\n");
+    print_r($match);
+    if(!$match or empty($match)){
+        exit(23);
+    }
+    else{
+        return $match[0];
+    }
+}
+
 # 
 function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
-    # first argument
-    $arg1_regex = "/(?<=$opcode ).*?(?= )/";
-    preg_match($arg1_regex, $line, $match_a);
+    $tmp_state = "";
+    $arg1 = get_next_arg($opcode, $line);
+    $tmp_state = get_current_state($opcode, $arg1, $line);
+    $arg2 = get_next_arg($tmp_state, $line);
+    $tmp_state = get_current_state($tmp_state, $arg2, $line);
+    $arg3 = remove_comment_new(get_next_arg($tmp_state, $line));
+    $tmp_state = get_current_state($tmp_state, $arg3, $line);
 
-    if(!$match_a){
-        exit(23);
-    }
-    $arg1 = $match_a[0];
-
-    # second argument
-    $arg2_regex = "/(?<=$opcode $arg1 ).*?(?= )/";
-    preg_match($arg2_regex, $line, $match_b);
-    if(!$match_b){
-        exit(23);
-    }
-    $arg2 = $match_b[0];
-
-    # third argument
-    $arg3_regex = "/(?<=$opcode $arg1 $arg2 )[^\s].*/";
-    preg_match($arg3_regex, $line, $match_c);
-    if(!$match_c){
-        exit(23);
-    }
-    $arg3 = $match_c[0];
-
-    if(has_comment($line)){
-        $last_part = remove_comment($arg3, $line, $arg3);
-        write_instruction_header($opcode);
-        if(evaluate_arg($arg1, $arg1_type, "arg1") != 0){
-            exit(23);
-        }
-        if(evaluate_arg($arg2, $arg2_type, "arg2") != 0){
-            exit(23);
-        }
-        if(evaluate_arg($last_part, $arg3_type, "arg3") != 0){
-            exit(23);
-        }
-        xmlwriter_end_element($GLOBALS['xml']);
-    }
-    elseif("$opcode $arg1 $arg2 $arg3\n" == $line or "$opcode $arg1 $arg2 $arg3" == $line){
-        write_instruction_header($opcode);
-        if(evaluate_arg($arg1, $arg1_type, "arg1") != 0){
-            exit(23);
-        }
-        if(evaluate_arg($arg2, $arg2_type, "arg2") != 0){
-            exit(23);
-        }
-        if(evaluate_arg($arg3, $arg3_type, "arg3") != 0){
-            exit(23);
-        }
-        xmlwriter_end_element($GLOBALS['xml']);
+    if(get_next_arg($tmp_state, $line) == ""){
+            write_instruction_header($opcode);
+            evaluate_arg($arg1, $arg1_type, "arg1");
+            evaluate_arg($arg2, $arg2_type, "arg2");
+            evaluate_arg($arg3, $arg3_type, "arg3");
+            xmlwriter_end_element($GLOBALS['xml']);
     }
     else{
         exit(23);

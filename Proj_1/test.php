@@ -41,7 +41,7 @@ function generate_html_head(){
     echo "        <style>\n";
 
     echo "            body{\n";
-    echo "                background-color:rgb(255, 175, 231);";
+    echo "                background-color:rgb(255, 175, 231);\n";
     echo "                font-family: \"Times New Roman\", Times, serif;\n";
     echo "            }\n";
 
@@ -275,6 +275,18 @@ class Tests{
         }
     }
 
+    public static function evaluate_xml_result(){
+        $is_ok = false;
+        $xml_test = fopen("tmp_xml_test", 'r');
+        $line_test = "";
+        while(($line_test = fgets($xml_test)) != false){
+            if($line_test == "Two files are identical" or $line_test == "Two files are identical\n"){
+                $is_ok = true;
+            }
+        }
+        return $is_ok;
+    }
+
     public static function run_test($directory_path, $file, $parse_only, $int_only){
         $GLOBALS['total_counter']++;
         $test_num = $GLOBALS['total_counter'];
@@ -289,34 +301,83 @@ class Tests{
         if($parse_only){    # we test only parser
             #echo 'php ' . $GLOBALS['parse_script'] . ' < ' . $directory_path . '/' . $file . '.src' . ' > ' . 'tmp_output_test' . '\n';
             exec('php ' . $GLOBALS['parse_script'] . ' < ' . $directory_path . '/' . $file . '.src > tmp_output_test', $exit_array, $exit_code); ### !!!!!!!!!!!! PHPHP VERSION
-        }
-        elseif($int_only){  # we test only interpreter
-            exec('python ' . $GLOBALS['int_script'] . '--source=' . $file . '.src input=' . $file . '.in > tmp_output_test', $exit_array, $exit_code); #### PYTHON VERSION
-        }
-        else{               # testing both
-            exec('php ' . $GLOBALS['parse_script'] . ' < ' . $directory_path . '/' . $file . '.src > tmp_output_test_php', $exit_array, $exit_code); ### !!!!!!!!!!!! PHPHP VERSION
-            exec('python ' . $GLOBALS['int_script'] . ' --source=tmp_output_test_php input=' . $file . '.in > tmp_output_test', $exit_array, $exit_code); #### PYTHON VERSION
-            exec('rm -f tmp_output_test_php');
-        }
-
-        # compare exit codes
-        if($exit_code == $expected_rc){
-            exec('diff tmp_output_test ' . $directory_path . '/' . $file . '.out > diff_tmp_output');
-            if(0 == filesize("diff_tmp_output")){
-                $GLOBALS['passed_counter']++;
-                self::test_result($test_num, $directory_path . "/" . $file, $file, true);
+            if($exit_code == $expected_rc){
+                if($exit_code == 0){    # also check the output
+                    exec('java -jar jexamxml.jar tmp_output_test ' . $directory_path . "/" . $file . ".out > tmp_xml_test");
+                    if(self::evaluate_xml_result()){
+                        $GLOBALS['passed_counter']++;
+                        self::test_result($test_num, $directory_path . "/" . $file, $file, true);
+                    }
+                    else{
+                        $GLOBALS['failed_counter']++;
+                        self::test_result($test_num, $directory_path . "/" . $file, $file, false);
+                    }
+                    exec('rm -f tmp_xml_test');
+                }
+                else{
+                    $GLOBALS['passed_counter']++;
+                    self::test_result($test_num, $directory_path . "/" . $file, $file, true);
+                }
             }
             else{
                 $GLOBALS['failed_counter']++;
                 self::test_result($test_num, $directory_path . "/" . $file, $file, false);
             }
-            exec('rm -f diff_tmp_output');
+            exec('rm -f tmp_output_test');
         }
-        else{
-            $GLOBALS['failed_counter']++;
-            self::test_result($test_num, $directory_path . "/" . $file, $file, false);
+        elseif($int_only){  # we test only interpreter
+            exec('python ' . $GLOBALS['int_script'] . '--source=' . $file . '.src input=' . $file . '.in > tmp_output_test', $exit_array, $exit_code); #### PYTHON VERSION
+            if($exit_code == $expected_rc){
+                if($exit_code == 0){
+                    exec('diff tmp_output_test ' . $directory_path . "/" . $file . ".out > tmp_diff_output");
+                    if(0 == filesize("tmp_diff_output")){
+                        $GLOBALS['passed_counter']++;
+                        self::test_result($test_num, $directory_path . "/" . $file, $file, true);
+                    }
+                    else{
+                        $GLOBALS['failed_counter']++;
+                        self::test_result($test_num, $directory_path . "/" . $file, $file, false);
+                    }
+                    exec('rm -f tmp_diff_output');
+                }
+                else{
+                    $GLOBALS['passed_counter']++;
+                    self::test_result($test_num, $directory_path . "/" . $file, $file, true);
+                }
+            }
+            else{
+                $GLOBALS['failed_counter']++;
+                self::test_result($test_num, $directory_path . "/" . $file, $file, false);
+            }
+            exec('rm -f tmp_output_test');
         }
-        exec('rm -f tmp_output_test');
+        else{               # testing both
+            exec('php ' . $GLOBALS['parse_script'] . ' < ' . $directory_path . '/' . $file . '.src > tmp_output_test_php', $exit_array, $exit_code); ### !!!!!!!!!!!! PHPHP VERSION
+            exec('python ' . $GLOBALS['int_script'] . ' --source=tmp_output_test_php input=' . $file . '.in > tmp_output_test', $exit_array, $exit_code); #### PYTHON VERSION
+            if($exit_code == $expected_rc){
+                if($exit_code == 0){
+                    exec('diff tmp_output_test ' . $directory_path . "/" . $file . ".out > tmp_diff_output");
+                    if(0 == filesize("tmp_diff_output")){
+                        $GLOBALS['passed_counter']++;
+                        self::test_result($test_num, $directory_path . "/" . $file, $file, true);
+                    }
+                    else{
+                        $GLOBALS['failed_counter']++;
+                        self::test_result($test_num, $directory_path . "/" . $file, $file, false);
+                    }
+                    exec('rm -f tmp_diff_output');
+                }
+                else{
+                    $GLOBALS['passed_counter']++;
+                    self::test_result($test_num, $directory_path . "/" . $file, $file, true);
+                }
+            }
+            else{
+                $GLOBALS['failed_counter']++;
+                self::test_result($test_num, $directory_path . "/" . $file, $file, false);
+            }
+            exec("tmp_output_test");
+        }
     }
 
     public static function test_result($num, $path, $file, $result){
