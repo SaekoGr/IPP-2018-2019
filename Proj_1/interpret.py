@@ -10,7 +10,6 @@ one_arg = ["DEFVAR", "CALL", "PUSHS", "POPS", "WRITE", "LABEL", "JUMP", "EXIT", 
 two_arg = ["MOVE", "INT2CHAR", "READ", "STRLEN", "TYPE"]
 three_arg = ["ADD", "SUB", "MUL", "IDIV", "LT", "GT", "EQ", "AND", "OR", "NOT", "STRI2INT", "CONCAT", "GETCHAR", "SETCHAR", "JUMPIFEQ", "JUMPIFNEQ"]
 
-
 #
 class Arguments:
     #
@@ -147,7 +146,7 @@ class Interpret:
             else:
                 sys.exit(32)
 
-            if(value == "None"):
+            if(value == None):
                 sys.exit(56)
             return value
         else:
@@ -236,7 +235,7 @@ class Interpret:
                 del self.local_frames[len(self.local_frames) - 1]
         # DEFVAR <var>
         elif(current_opcode == "DEFVAR"):
-            self.insert_to_frame(arg1.name, arg1.frame, "None")
+            self.insert_to_frame(arg1.name, arg1.frame, None)
         # MOVE <var> <symb>
         elif(current_opcode == "MOVE"):
             value = self.get_argument_value(arg2)
@@ -349,7 +348,81 @@ class Interpret:
             except:
                 sys.exit(58)
             self.insert_to_frame(arg1.name, arg1.frame, new_char)
-            
+        # STRI2INT <var> <symb> <symb>
+        elif(current_opcode == "STRI2INT"):
+            string_value = self.get_argument_value(arg2)
+            index = self.get_argument_value(arg3)
+            if(isinstance(string_value, str) and isinstance(index, int)):
+                try:
+                    value = ord(string_value[index])
+                except:
+                    sys.exit(58)
+                self.insert_to_frame(arg1.name, arg1.frame, value)
+            else:
+                sys.exit(53)
+        # CONCAT <var> <symb> <symb>
+        elif(current_opcode == "CONCAT"):
+            value_1 = self.get_argument_value(arg2)
+            value_2 = self.get_argument_value(arg3)
+            print(value_1, value_2)
+            if(isinstance(value_1, str) and isinstance(value_2, str)):
+                new_string = value_1 + value_2
+            else:
+                sys.exit(53)
+            self.insert_to_frame(arg1.name, arg1.frame, new_string)
+        # STRLEN <var> <symb>
+        elif(current_opcode == "STRLEN"):
+            string = self.get_argument_value(arg2)
+            if(isinstance(string, str)):
+                length = len(string)
+            else:
+                sys.exit(53)
+            self.insert_to_frame(arg1.name, arg1.frame, length)
+        # GETCHAR <var> <symb> <symb>
+        elif(current_opcode == "GETCHAR"):
+            string = self.get_argument_value(arg2)
+            index = self.get_argument_value(arg3)
+            if(isinstance(string, str) and isinstance(index, int)):
+                try:
+                    char = string[index]
+                except:
+                    sys.exit(58)
+            else:
+                sys.exit(53)
+            self.insert_to_frame(arg1.name, arg1.frame, char)
+        # SETCHAR <var> <symb> <symb>
+        elif(current_opcode == "SETCHAR"):
+            string = self.get_argument_value(arg1)
+            index = self.get_argument_value(arg2)
+            char = self.get_argument_value(arg3)
+            if(isinstance(string, str) and string != None):
+                if(isinstance(char, str) and char != ""):
+                    try:
+                        char = char[0]
+                        string = list(string)
+                        string[index] = char
+                        string = "".join(string)
+                    except:
+                        sys.exit(58)
+                else:
+                    sys.exit(58)
+            else:
+                sys.exit(58)
+            self.insert_to_frame(arg1.name, arg1.frame, string)
+        # TYPE <var> <symb>
+        elif(current_opcode == "TYPE"):
+            variable = self.get_argument_value(arg2)
+            if(isinstance(variable, int)):
+                pass
+            elif(isinstance(variable, int)):
+                pass
+            elif(isinstance(variable, bool)):
+                pass
+            elif(isinstance(variable, None)):
+                pass
+
+        
+
 
         self.debug_print()
 

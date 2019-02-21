@@ -1,11 +1,8 @@
 #!/usr/bin/env php
 <?php
-
-
 ### TODO - COMMENTS
 ### SYMB
 ### EVALUATE RETURN CODE
-
 define('types', array(
     'int',
     'bool',
@@ -15,7 +12,6 @@ define('types', array(
     'type',
     'var'
 ));
-
 #
 function substr_in_array($needle, array $haystack){
     foreach($haystack as $item){
@@ -25,7 +21,6 @@ function substr_in_array($needle, array $haystack){
     }
     return false;
 }
-
 # prepares xml document
 function prepare_document($xml){
     xmlwriter_set_indent($xml, 1);
@@ -37,7 +32,6 @@ function prepare_document($xml){
     xmlwriter_end_attribute($xml);
     return $xml;
 }
-
 # writes header for instruction
 function write_instruction_header($opcode){
     xmlwriter_start_element($GLOBALS['xml'], "instruction");
@@ -47,7 +41,6 @@ function write_instruction_header($opcode){
     xmlwriter_start_attribute($GLOBALS['xml'], "opcode");
     xmlwriter_text($GLOBALS['xml'], strtoupper($opcode));
 }
-
 # 
 function has_comment($line){
     if(strpos($line, '#') !== false){
@@ -57,7 +50,6 @@ function has_comment($line){
         return false;
     }
 }
-
 # writes argument
 function write_arg($type, $arg_num, $arg){
     xmlwriter_start_element($GLOBALS['xml'], $arg_num);
@@ -67,7 +59,6 @@ function write_arg($type, $arg_num, $arg){
     xmlwriter_text($GLOBALS['xml'], $arg);
     xmlwriter_end_element($GLOBALS['xml']);
 }
-
 # it gets the type in front of the '@' 
 function get_type($arg){
     $type_regex = "/.*(?=@)/";
@@ -76,7 +67,6 @@ function get_type($arg){
         exit(23);
     }
     $type = $match[0];
-
     if($type == "GF" or $type == "LF" or $type == "TF"){
         return "var";
     }
@@ -89,7 +79,6 @@ function get_type($arg){
         exit(23);
     }
 }
-
 # checks whether it contains '@'
 function has_at($arg){
     if(strpos($arg, '@') !== false){
@@ -99,19 +88,32 @@ function has_at($arg){
         return false;
     }
 }
-
 # gets everything after '@'
-function after_at($arg){
+function after_at($arg, $arg_type){
     if(has_at($arg)){
+        switch($arg_type){
+            case "string":
+                if(strpos($arg, '\\') !== false){
+                    $arg = str_replace('\\', '\\\\', $arg);
+                }
+                break;
+            default:
+                if(strpos($arg, '\\') !== false){
+                    exit(23);
+                }
+                break;
+        }
+        
         $after_regex = "/(?<=@).*/";
         preg_match($after_regex, $arg, $match);
+
+        $match[0] = str_replace('\\\\', '\\', $match[0]);
         return $match[0];
     }
     else{
         exit(23);
     }
 }
-
 # evaluates arguments, opcodes, sorts it into the xml format
 function evaluate_arg($arg, $arg_type, $arg_num){
     if($arg_type == "symb"){
@@ -122,7 +124,7 @@ function evaluate_arg($arg, $arg_type, $arg_num){
     }
     switch($arg_type){
         case "string":
-            $current_string = after_at($arg);
+            $current_string = after_at($arg, $arg_type);
             if($current_string == 23){
                 exit(23);
             }
@@ -140,7 +142,7 @@ function evaluate_arg($arg, $arg_type, $arg_num){
             }
             break;
         case "bool":
-            $bool_value = after_at($arg);
+            $bool_value = after_at($arg, $arg_type);
             if(strcmp($bool_value, "true") == 0){
                 write_arg($arg_type, $arg_num, $bool_value);
             }
@@ -153,7 +155,7 @@ function evaluate_arg($arg, $arg_type, $arg_num){
             break;
         case "int":
         case "nil":
-            $after_at = after_at($arg);
+            $after_at = after_at($arg, $arg_type);
             write_arg($arg_type, $arg_num, $after_at);
             break;
         case "var":
@@ -164,8 +166,7 @@ function evaluate_arg($arg, $arg_type, $arg_num){
     }
 }
 
-
-
+#
 function remove_comment($word){
     if(has_comment($word)){
         $before_comment = "/.*(?=#)/";
@@ -176,7 +177,6 @@ function remove_comment($word){
         return $word;
     }
 }
-
 #
 function remove_whitespaces($word){
     $tmp_word = "";
@@ -188,9 +188,6 @@ function remove_whitespaces($word){
     }
     return $tmp_word;
 }
-
-
-
 # instruction has no arguments
 function zero_args($opcode, $line){
     if(get_next_arg($opcode, $line) == ""){
@@ -201,15 +198,19 @@ function zero_args($opcode, $line){
         exit(23);
     }
 }
-
 #
 function get_next_arg($word, $line){
+    if(strpos($word, '\\') !== false){
+        $word = str_replace('\\', '\\\\', $word);
+    }
+
     $arg_regex = "/(?<=$word\s).*?(?=\s)/";
     preg_match($arg_regex, $line, $match);
     if(!$match or empty($match)){
         return "";
     }
     else{
+        $match[0] = str_replace('\\\\', '\\', $match[0]);
         return remove_whitespaces($match[0]);
     }
 }
@@ -217,22 +218,18 @@ function get_next_arg($word, $line){
 #
 function one_arg($opcode, $line, $arg1_type){
     $arg1 = remove_comment(get_next_arg($opcode, $line));
-
     if($arg1 == ""){
         exit(23);
     }
-
     if(!strcasecmp($opcode, "JUMP") and $GLOBALS['stats'] and $GLOBALS['jumps']){
         $GLOBALS['jump_counter']++;
     }
-
     if(!strcasecmp($opcode, "LABEL") and $GLOBALS['stats'] and $GLOBALS['jumps']){
         if(!in_array($arg1, $GLOBALS['label_array'])){
             array_push($GLOBALS['label_array'], $arg1);
             $GLOBALS['label_counter']++;
         }
     }
-
     if(get_next_arg($arg1, $line) == ""){
         write_instruction_header($opcode);
         evaluate_arg($arg1, $arg1_type, "arg1");
@@ -242,7 +239,6 @@ function one_arg($opcode, $line, $arg1_type){
         exit(23);
     }
 }
-
 #
 function two_args($opcode, $line, $arg1_type, $arg2_type){
     $tmp_state = "";
@@ -250,11 +246,9 @@ function two_args($opcode, $line, $arg1_type, $arg2_type){
     $tmp_state = get_current_state($opcode, $arg1, $line);
     $arg2 = remove_comment(get_next_arg($arg1, $line));
     $tmp_state = get_current_state($tmp_state, $arg2, $line);
-
     if($arg1 == "" or $arg2 == ""){
         exit(23);
     }
-
     if(get_next_arg($tmp_state, $line) == ""){
         write_instruction_header($opcode);
         evaluate_arg($arg1, $arg1_type, "arg1");
@@ -265,35 +259,47 @@ function two_args($opcode, $line, $arg1_type, $arg2_type){
         exit(23);
     }
 }
-
-
-
 #
 function get_current_state($word_1, $word_2, $line){
+    if(strpos($word_1, '\\') !== false){
+        $word_1 = str_replace('\\', '\\\\', $word_1);
+    }
+    if(strpos($word_2, '\\') !== false){
+        $word_2 = str_replace('\\', '\\\\', $word_2);
+    }
+
     $basic_regex = "/$word_1\s*$word_2/";
     preg_match($basic_regex, $line, $match);
     if(!$match or empty($match)){
         exit(23);
     }
     else{
+        $match[0] = str_replace('\\\\', '\\', $match[0]);
         return $match[0];
     }
 }
-
 # 
 function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
+    #print("Beginning\n");
     $tmp_state = "";
+
     $arg1 = get_next_arg($opcode, $line);
     $tmp_state = get_current_state($opcode, $arg1, $line);
+    #print("First arg added : $arg1 : $tmp_state\n");
+
     $arg2 = get_next_arg($tmp_state, $line);
     $tmp_state = get_current_state($tmp_state, $arg2, $line);
+    #print("Second arg added : $arg2 : $tmp_state\n");
+
     $arg3 = remove_comment(get_next_arg($tmp_state, $line));
     $tmp_state = get_current_state($tmp_state, $arg3, $line);
+    #print("Third arg added : $arg3 : $tmp_state\n");
+
+    #print("End of parsing arguments : $tmp_state\n");
 
     if($arg1 == "" or $arg2 == "" or $arg3 == ""){
         exit(23);
     }
-
     if(!strcasecmp($opcode, "JUMPIFEQ") and $GLOBALS['stats'] and $GLOBALS['jumps']){
         $GLOBALS['jump_counter']++;
     }
@@ -301,18 +307,19 @@ function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
         $GLOBALS['jump_counter']++;
     }
 
-    if(get_next_arg($tmp_state, $line) == ""){
+    if(get_next_arg($tmp_state, $line) == ""){;
             write_instruction_header($opcode);
             evaluate_arg($arg1, $arg1_type, "arg1");
             evaluate_arg($arg2, $arg2_type, "arg2");
             evaluate_arg($arg3, $arg3_type, "arg3");
+            
             xmlwriter_end_element($GLOBALS['xml']);
+            
     }
     else{
         exit(23);
     }
 }
-
 #
 function compare_opcode($opcode, $line){
     if(!strcasecmp($opcode, "CREATEFRAME")){        # 0
@@ -425,7 +432,6 @@ function compare_opcode($opcode, $line){
     }
     return 0;
 }
-
 # look whether the line is comment
 function is_one_line_comment($line){
     $comment_regex = "/[ \t]*#.*/";
@@ -443,7 +449,6 @@ function is_one_line_comment($line){
         return false;
     }
 }
-
 #
 function check_whitespaces($line){
     $size_line = strlen($line);
@@ -459,7 +464,6 @@ function check_whitespaces($line){
     }
     return true;
 }
-
 # processes each line
 function process_line($line){
     # check for one line comment
@@ -472,46 +476,37 @@ function process_line($line){
     if(check_whitespaces($line)){
         return 0;
     }
-
     $opcode_regex = "/^[\s]*([a-zA-Z2]*)/";
     preg_match($opcode_regex, $line, $match);
     
     $opcode = $match[count($match)-1];
     return compare_opcode($opcode, $line);
-
 }
-
 # functions for help
 function print_help(){
     fwrite(STDOUT, "Usage: php7.3 parse.php < file\n");
     exit(0);
 }
-
 function get_path($full_string){
     $path_regex = "/(?<==).*/";
     preg_match($path_regex, $full_string, $match);
     return $match[0];
 }
-
 #                           #
 #           MAIN            #
 #                           #
-
 $stats = false;
 $loc = false;
 $comments = false;
 $labels = false;
 $jumps = false;
 $stats_path = "";
-
 $loc_counter = 0;
 $comment_counter = 0;
 $label_counter = 0;
 $jump_counter = 0;
-
 $stats_array = [];
 $label_array = [];
-
 # parsing the input arguments
 if($argc == 1){                 # no arguments, wait for stdin
     ;
@@ -559,12 +554,10 @@ else{
         exit(10);
     }
 }
-
 $f = fopen('php://stdin', 'r');
     if(!$f){
         #fwrite(STDERR, "Error opening file\n");
 }
-
 # check the header
 $fh = fgets($f);
 if($fh == ".IPPcode19\n"){
@@ -574,17 +567,14 @@ else{
     fwrite(STDERR, "Header is missing or incorrect\n");
     exit(21);
 }
-
 # prepare xml document
 $xml = xmlwriter_open_memory();
 $xml = prepare_document($xml);
 $instruction_counter = 1;
-
 # reading line by line and processing it
 while(($line = fgets($f)) != false){
     
     $ret_code = process_line($line);
-
     if($ret_code == 22){
         fwrite(STDERR, "Incorrect or uknown opcode\n");
         exit($ret_code);
@@ -594,7 +584,6 @@ while(($line = fgets($f)) != false){
         exit($ret_code);
     }
 }
-
 if($stats){
     $st = fopen($stats_path, 'w');
     foreach($stats_array as $item){
@@ -618,11 +607,9 @@ if($stats){
     }
     fclose($st);
 }
-
 # close xml document
 xmlwriter_end_element($xml);
 xmlwriter_end_document($xml);
 echo xmlwriter_output_memory($xml);
 exit(0);
-
 ?>
