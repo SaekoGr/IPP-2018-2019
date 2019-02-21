@@ -372,6 +372,9 @@ function compare_opcode($opcode, $line){
     elseif(!strcasecmp($opcode, "TYPE")){           # 2
         return two_args($opcode, $line, "var", "symb");
     }
+    elseif(!strcasecmp($opcode, "NOT")){            # 2
+        return two_args($opcode, $line, "var", "symb");
+    }
     elseif(!strcasecmp($opcode, "ADD")){            # 3
         return three_args($opcode, $line, "var", "symb", "symb");
     }
@@ -397,9 +400,6 @@ function compare_opcode($opcode, $line){
         return three_args($opcode, $line, "var", "symb", "symb");
     }
     elseif(!strcasecmp($opcode, "OR")){             # 3
-        return three_args($opcode, $line, "var", "symb", "symb");
-    }
-    elseif(!strcasecmp($opcode, "NOT")){            # 3
         return three_args($opcode, $line, "var", "symb", "symb");
     }
     elseif(!strcasecmp($opcode, "STRI2INT")){       # 3
@@ -473,7 +473,7 @@ function process_line($line){
         return 0;
     }
 
-    $opcode_regex = "/^[\s]*([a-zA-Z]*)/";
+    $opcode_regex = "/^[\s]*([a-zA-Z2]*)/";
     preg_match($opcode_regex, $line, $match);
     
     $opcode = $match[count($match)-1];

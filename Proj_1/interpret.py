@@ -5,6 +5,11 @@ import re
 import xml.etree.ElementTree as ET
 from enum import Enum
 
+non_arg = ["CREATEFRAME", "PUSHFRAME", "POPFRAME" , "RETURN", "BREAK"]
+one_arg = ["DEFVAR", "CALL", "PUSHS", "POPS", "WRITE", "LABEL", "JUMP", "EXIT", "DPRINT"]
+two_arg = ["MOVE", "INT2CHAR", "READ", "STRLEN", "TYPE"]
+three_arg = ["ADD", "SUB", "MUL", "IDIV", "LT", "GT", "EQ", "AND", "OR", "NOT", "STRI2INT", "CONCAT", "GETCHAR", "SETCHAR", "JUMPIFEQ", "JUMPIFNEQ"]
+
 
 #
 class Arguments:
@@ -91,7 +96,6 @@ class Interpret:
     def prepare_labels(self, root):
         try:
             for i in range(0, len(root)):
-                #print(root[i].attrib['opcode'])
                 if(root[i].attrib['opcode'] == "LABEL"):
                     for child in root[i]:
                         if(child.text in self.labels):
@@ -101,21 +105,43 @@ class Interpret:
             sys.exit(32)
 
     #
+    def format_value(self, value, value_type):
+        if(value_type == "int"):
+            if(str.isdigit(value)):
+                return int(value)
+            else:
+                exit(32)
+        elif(value_type == "bool"):
+            if(value == "true"):
+                return True
+            elif(value == "false"):
+                return False
+            else:
+                exit(32)
+        elif(value_type == "string"):
+            if(isinstance(value_type, str)):
+                return value
+            else:
+                exit(32)
+        else:
+            pass    # baaaaaaaad
+
+    #
     def get_argument_value(self, argument):
         if(argument.type == "var"):
             if(argument.frame == "GF"):
                 try:
-                    value = self.global_frame[self.name]
+                    value = self.global_frame[argument.name]
                 except:
                     sys.exit(54)
             elif(argument.frame == "LF"):
                 try:
-                    value = self.local_frames[len(self.local_frames)-1][self.name]
+                    value = self.local_frames[len(self.local_frames)-1][argument.name]
                 except:
                     sys.exit(55)
             elif(argument.frame == "TF"):
                 try:
-                    value = self.temporary_frame[self.name]
+                    value = self.temporary_frame[argument.name]
                 except:
                     sys.exit(55)
             else:
@@ -125,7 +151,9 @@ class Interpret:
                 sys.exit(56)
             return value
         else:
-            return argument.value
+            return self.format_value(argument.value, argument.type)
+
+    
 
     # also updates
     def insert_to_frame(self, name, target_frame, value):
@@ -172,6 +200,23 @@ class Interpret:
         except:
             sys.exit(32)
 
+        # prepare args #
+        if(current_opcode in non_arg):
+            pass
+        elif(current_opcode in one_arg):
+            arg1 = Operand(self.root[op_num][0])
+        elif(current_opcode in two_arg):
+            arg1 = Operand(self.root[op_num][0])
+            arg2 = Operand(self.root[op_num][1])
+        elif(current_opcode in three_arg):
+            arg1 = Operand(self.root[op_num][0])
+            arg2 = Operand(self.root[op_num][1])
+            arg3 = Operand(self.root[op_num][2])
+        else:
+            exit(32)
+
+
+
         # CREATEFRAME
         if(current_opcode == "CREATEFRAME"):
             self.temporary_frame = {}
@@ -191,30 +236,120 @@ class Interpret:
                 del self.local_frames[len(self.local_frames) - 1]
         # DEFVAR <var>
         elif(current_opcode == "DEFVAR"):
-            arg1 = Operand(self.root[op_num][0])
             self.insert_to_frame(arg1.name, arg1.frame, "None")
         # MOVE <var> <symb>
         elif(current_opcode == "MOVE"):
-            arg1 = Operand(self.root[op_num][0])
-            arg2 = Operand(self.root[op_num][1])
             value = self.get_argument_value(arg2)
             self.insert_to_frame(arg1.name, arg1.frame, value)
         # PUSHS <symb>
         elif(current_opcode == "PUSHS"):
-            arg1 = Operand(self.root[op_num][0])
             value = self.get_argument_value(arg1)
             self.data_stack.append(value)
         # POPS <var>
         elif(current_opcode == "POPS"):
-            arg1 = Operand(self.root[op_num][0])
             if(len(self.data_stack) == 0):
                 sys.exit(56)
             value = self.data_stack[len(self.data_stack) - 1]
             del self.data_stack[len(self.data_stack) - 1]
             self.insert_to_frame(arg1.name, arg1.frame, value)
+        # ADD <var> <symb> <symb>
+        elif(current_opcode == "ADD"):
+            value_1 = self.get_argument_value(arg2)
+            value_2 = self.get_argument_value(arg3)
+            if(isinstance(value_1, bool) or isinstance(value_2, bool)):
+                exit(53)
 
+            if(isinstance(value_1, int) and isinstance(value_2, int)):
+                result = int(value_1 + value_2)
+                self.insert_to_frame(arg1.name, arg1.frame, result)
+            else:
+                sys.exit(53)
+        # SUB <var> <symb> <symb>
+        elif(current_opcode == "SUB"):
+            value_1 = self.get_argument_value(arg2)
+            value_2 = self.get_argument_value(arg3)
+            if(isinstance(value_1, bool) or isinstance(value_2, bool)):
+                exit(53)
 
+            if(isinstance(value_1, int) and isinstance(value_2, int)):
+                result = int(value_1 - value_2)
+                self.insert_to_frame(arg1.name, arg1.frame, result)
+            else:
+                sys.exit(53)
+        # MUL <var> <symb> <symb>
+        elif(current_opcode == "MUL"):
+            value_1 = self.get_argument_value(arg2)
+            value_2 = self.get_argument_value(arg3)
+            if(isinstance(value_1, bool) or isinstance(value_2, bool)):
+                sys.exit(53)
 
+            if(isinstance(value_1, int) and isinstance(value_2, int)):
+                result = int(value_1 * value_2)
+                self.insert_to_frame(arg1.name, arg1.frame, result)
+            else:
+                sys.exit(53)
+        # IDIV <var> <symb> <symb>
+        elif(current_opcode == "IDIV"):
+            value_1 = self.get_argument_value(arg2)
+            value_2 = self.get_argument_value(arg3)
+            if(isinstance(value_1, bool) or isinstance(value_2, bool)):
+                sys.exit(53)
+
+            if(isinstance(value_1, int) and isinstance(value_2, int)):
+                if(value_2 == 0):
+                    sys.exit(57)
+                result = int(value_1 / value_2)
+                self.insert_to_frame(arg1.name, arg1.frame, result)
+            else:
+                sys.exit(53)
+        # LT <var> <symb> <symb>
+        elif(current_opcode == "LT"):
+            value_1 = self.get_argument_value(arg2)
+            value_2 = self.get_argument_value(arg3)
+
+            if(type(value_1) != type(value_2)):
+                exit(53)
+
+            if(isinstance(value_1, int) or isinstance(value_1, bool) or isinstance(value_1, str)):
+                result = value_1<value_2
+            else:
+                exit(53)
+            self.insert_to_frame(arg1.name, arg1.frame, result)
+        # GT <var> <symb> <symb>
+        elif(current_opcode == "GT"):
+            value_1 = self.get_argument_value(arg2)
+            value_2 = self.get_argument_value(arg3)
+
+            if(type(value_1) != type(value_2)):
+                exit(53)
+
+            if(isinstance(value_1, int) or isinstance(value_1, bool) or isinstance(value_1, str)):
+                result = value_1>value_2
+            else:
+                exit(53)
+            self.insert_to_frame(arg1.name, arg1.frame, result)
+        # EQ <var> <symb> <symb>
+        elif(current_opcode == "EQ"):
+            value_1 = self.get_argument_value(arg2)
+            value_2 = self.get_argument_value(arg3)
+
+            if(type(value_1) != type(value_2)):
+                exit(53)
+
+            if(isinstance(value_1, int) or isinstance(value_1, bool) or isinstance(value_1, str) or isinstance(value_1, None)):
+                result = value_1 == value_2
+            else:
+                exit(53)
+            self.insert_to_frame(arg1.name, arg1.frame, result)
+        # INT2CHAR <var> <symb>
+        elif(current_opcode == "INT2CHAR"):
+            value_1 = self.get_argument_value(arg2)
+            try:
+                new_char = chr(value_1)
+            except:
+                sys.exit(58)
+            self.insert_to_frame(arg1.name, arg1.frame, new_char)
+            
 
         self.debug_print()
 
