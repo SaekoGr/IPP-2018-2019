@@ -4,11 +4,13 @@ import sys
 import re
 import xml.etree.ElementTree as ET
 from enum import Enum
+from unidecode import unidecode
+import codecs
 
 non_arg = ["CREATEFRAME", "PUSHFRAME", "POPFRAME" , "RETURN", "BREAK"]
 one_arg = ["DEFVAR", "CALL", "PUSHS", "POPS", "WRITE", "LABEL", "JUMP", "EXIT", "DPRINT"]
-two_arg = ["MOVE", "INT2CHAR", "READ", "STRLEN", "TYPE"]
-three_arg = ["ADD", "SUB", "MUL", "IDIV", "LT", "GT", "EQ", "AND", "OR", "NOT", "STRI2INT", "CONCAT", "GETCHAR", "SETCHAR", "JUMPIFEQ", "JUMPIFNEQ"]
+two_arg = ["MOVE", "INT2CHAR", "READ", "STRLEN", "TYPE", "NOT"]
+three_arg = ["ADD", "SUB", "MUL", "IDIV", "LT", "GT", "EQ", "AND", "OR", "STRI2INT", "CONCAT", "GETCHAR", "SETCHAR", "JUMPIFEQ", "JUMPIFNEQ"]
 
 #
 class Arguments:
@@ -52,6 +54,7 @@ class Arguments:
         sys.stdout.write("--input=file : sets path to the file that contains input for interpretation\n")
         sys.stdout.write("At least one file must be given\n")
 
+#
 class Operand:
     def __init__(self, instruction):
         try:
@@ -60,18 +63,24 @@ class Operand:
             exit(32)
 
         if(self.type == "var"):
-            if("@" in instruction.text):
-                self.frame = self.get_frame(instruction.text)
-                self.name = self.get_name(instruction.text)
-                self.value = None
-            else:
+            try:
+                if("@" in instruction.text):
+                    self.frame = self.get_frame(instruction.text)
+                    self.name = self.get_name(instruction.text)
+                    self.value = None
+                else:
+                    sys.exit(32)
+            except:
                 sys.exit(32)
         else:
-            self.value = instruction.text
-            self.frame = None
-            self.name = None
+            try:
+                self.value = instruction.text
+                self.frame = None
+                self.name = None
+            except:
+                sys.exit(32)
 
-    def get_frame(self, name):
+    def get_frame(self, name):  # TODO - try excep - both
         nam = re.search(r'.*(?=@)', name)
         return nam.group(0)
 
@@ -90,6 +99,7 @@ class Interpret:
         self.data_stack = []
         self.labels = {}
         self.root = root
+        self.call_stack = []
 
     #
     def prepare_labels(self, root):
@@ -98,7 +108,7 @@ class Interpret:
                 if(root[i].attrib['opcode'] == "LABEL"):
                     for child in root[i]:
                         if(child.text in self.labels):
-                            exit(52)    ## TODO --- check this return code
+                            exit(52)
                         self.labels.update({child.text : root[i].attrib['order']})
         except:
             sys.exit(32)
@@ -122,6 +132,12 @@ class Interpret:
                 return value
             else:
                 exit(32)
+        elif(value_type == "label"):
+            return value
+        elif(value_type == "type"):
+            return value
+        elif(value_type == "nil"):
+            return value
         else:
             pass    # baaaaaaaad
 
@@ -192,6 +208,12 @@ class Interpret:
             pass
         print("")
 
+    def start(self):
+        self.counter = 0
+        while self.counter < len(self.root):
+            self.execute_instruction(self.counter)
+
+
     #
     def execute_instruction(self, op_num):
         try:
@@ -215,10 +237,12 @@ class Interpret:
             exit(32)
 
 
+    
 
         # CREATEFRAME
         if(current_opcode == "CREATEFRAME"):
             self.temporary_frame = {}
+            self.counter = self.counter + 1
         # PUSHFRAME
         elif(current_opcode == "PUSHFRAME"):
             try:
@@ -226,6 +250,7 @@ class Interpret:
                 del self.temporary_frame
             except:
                 sys.exit(55)
+            self.counter = self.counter + 1
         # POPFRAME
         elif(current_opcode == "POPFRAME"):
             if(len(self.local_frames) == 0):
@@ -233,17 +258,21 @@ class Interpret:
             else:
                 self.temporary_frame = (self.local_frames[len(self.local_frames) - 1]).copy()
                 del self.local_frames[len(self.local_frames) - 1]
+            self.counter = self.counter + 1
         # DEFVAR <var>
         elif(current_opcode == "DEFVAR"):
             self.insert_to_frame(arg1.name, arg1.frame, None)
+            self.counter = self.counter + 1
         # MOVE <var> <symb>
         elif(current_opcode == "MOVE"):
             value = self.get_argument_value(arg2)
             self.insert_to_frame(arg1.name, arg1.frame, value)
+            self.counter = self.counter + 1
         # PUSHS <symb>
         elif(current_opcode == "PUSHS"):
             value = self.get_argument_value(arg1)
             self.data_stack.append(value)
+            self.counter = self.counter + 1
         # POPS <var>
         elif(current_opcode == "POPS"):
             if(len(self.data_stack) == 0):
@@ -251,6 +280,7 @@ class Interpret:
             value = self.data_stack[len(self.data_stack) - 1]
             del self.data_stack[len(self.data_stack) - 1]
             self.insert_to_frame(arg1.name, arg1.frame, value)
+            self.counter = self.counter + 1
         # ADD <var> <symb> <symb>
         elif(current_opcode == "ADD"):
             value_1 = self.get_argument_value(arg2)
@@ -263,6 +293,7 @@ class Interpret:
                 self.insert_to_frame(arg1.name, arg1.frame, result)
             else:
                 sys.exit(53)
+            self.counter = self.counter + 1
         # SUB <var> <symb> <symb>
         elif(current_opcode == "SUB"):
             value_1 = self.get_argument_value(arg2)
@@ -275,6 +306,7 @@ class Interpret:
                 self.insert_to_frame(arg1.name, arg1.frame, result)
             else:
                 sys.exit(53)
+            self.counter = self.counter + 1
         # MUL <var> <symb> <symb>
         elif(current_opcode == "MUL"):
             value_1 = self.get_argument_value(arg2)
@@ -287,6 +319,7 @@ class Interpret:
                 self.insert_to_frame(arg1.name, arg1.frame, result)
             else:
                 sys.exit(53)
+            self.counter = self.counter + 1
         # IDIV <var> <symb> <symb>
         elif(current_opcode == "IDIV"):
             value_1 = self.get_argument_value(arg2)
@@ -301,6 +334,7 @@ class Interpret:
                 self.insert_to_frame(arg1.name, arg1.frame, result)
             else:
                 sys.exit(53)
+            self.counter = self.counter + 1
         # LT <var> <symb> <symb>
         elif(current_opcode == "LT"):
             value_1 = self.get_argument_value(arg2)
@@ -314,6 +348,7 @@ class Interpret:
             else:
                 exit(53)
             self.insert_to_frame(arg1.name, arg1.frame, result)
+            self.counter = self.counter + 1
         # GT <var> <symb> <symb>
         elif(current_opcode == "GT"):
             value_1 = self.get_argument_value(arg2)
@@ -327,6 +362,7 @@ class Interpret:
             else:
                 exit(53)
             self.insert_to_frame(arg1.name, arg1.frame, result)
+            self.counter = self.counter + 1
         # EQ <var> <symb> <symb>
         elif(current_opcode == "EQ"):
             value_1 = self.get_argument_value(arg2)
@@ -340,6 +376,7 @@ class Interpret:
             else:
                 exit(53)
             self.insert_to_frame(arg1.name, arg1.frame, result)
+            self.counter = self.counter + 1
         # INT2CHAR <var> <symb>
         elif(current_opcode == "INT2CHAR"):
             value_1 = self.get_argument_value(arg2)
@@ -348,6 +385,7 @@ class Interpret:
             except:
                 sys.exit(58)
             self.insert_to_frame(arg1.name, arg1.frame, new_char)
+            self.counter = self.counter + 1
         # STRI2INT <var> <symb> <symb>
         elif(current_opcode == "STRI2INT"):
             string_value = self.get_argument_value(arg2)
@@ -360,6 +398,7 @@ class Interpret:
                 self.insert_to_frame(arg1.name, arg1.frame, value)
             else:
                 sys.exit(53)
+            self.counter = self.counter + 1
         # CONCAT <var> <symb> <symb>
         elif(current_opcode == "CONCAT"):
             value_1 = self.get_argument_value(arg2)
@@ -370,6 +409,7 @@ class Interpret:
             else:
                 sys.exit(53)
             self.insert_to_frame(arg1.name, arg1.frame, new_string)
+            self.counter = self.counter + 1
         # STRLEN <var> <symb>
         elif(current_opcode == "STRLEN"):
             string = self.get_argument_value(arg2)
@@ -378,6 +418,7 @@ class Interpret:
             else:
                 sys.exit(53)
             self.insert_to_frame(arg1.name, arg1.frame, length)
+            self.counter = self.counter + 1
         # GETCHAR <var> <symb> <symb>
         elif(current_opcode == "GETCHAR"):
             string = self.get_argument_value(arg2)
@@ -390,6 +431,7 @@ class Interpret:
             else:
                 sys.exit(53)
             self.insert_to_frame(arg1.name, arg1.frame, char)
+            self.counter = self.counter + 1
         # SETCHAR <var> <symb> <symb>
         elif(current_opcode == "SETCHAR"):
             string = self.get_argument_value(arg1)
@@ -409,22 +451,184 @@ class Interpret:
             else:
                 sys.exit(58)
             self.insert_to_frame(arg1.name, arg1.frame, string)
+            self.counter = self.counter + 1
         # TYPE <var> <symb>
         elif(current_opcode == "TYPE"):
             variable = self.get_argument_value(arg2)
-            if(isinstance(variable, int)):
+            if(type(variable) is int):
+                self.insert_to_frame(arg1.name, arg1.frame, "int")
+            elif(type(variable) is str):
+                self.insert_to_frame(arg1.name, arg1.frame, "string")
+            elif(type(variable) is bool):
+                self.insert_to_frame(arg1.name, arg1.frame, "bool")
+            elif(variable == None):
+                self.insert_to_frame(arg1.name, arg1.frame, "nil")
+            else:
+                sys.exit(53)
+            self.counter = self.counter + 1
+        # DPRINT <symb>
+        elif(current_opcode == "DPRINT"):
+            exit_code = self.get_argument_value(arg1)
+            sys.stderr.write(exit_code)
+        # BREAK
+        elif(current_opcode == "BREAK"):
+            sys.stderr.write("Currently carrying out " + str(op_num + 1) + ". instruction\n")
+            sys.stderr.write("Global frame contains " + str(self.global_frame) + "\n")
+            sys.stderr.write("There is/are " + str(len(self.local_frames)) + " local frames\n")
+            if(len(self.local_frames) != 0):
+                sys.stderr.write("Top local frame contains " + str(self.local_frames[len(self.local_frames) - 1]) + "\n")
+            try:
+                sys.stderr.write("Temporary frame contains " + str(self.temporary_frame) + "\n")
+            except:
+                sys.stderr.write("Temporary frame doesn't exist\n")
+            self.counter = self.counter + 1
+        # EXIT <symb>
+        elif(current_opcode == "EXIT"):
+            exit_code = self.get_argument_value(arg1)
+            if(exit_code >=0 and exit_code <= 49):
+                sys.exit(exit_code)
+            else:
+                sys.exit(57)
+            self.counter = self.counter + 1
+        # JUMP <label>
+        elif(current_opcode == "JUMP"):
+            label = self.get_argument_value(arg1)
+            try:
+                jump_destination = self.labels[label]
+                self.counter = int(jump_destination) - 1
+            except:
+                sys.exit(52)
+
+        # LABEL <label>
+        elif(current_opcode == "LABEL"):
+            self.counter = self.counter + 1
+        # JUMPIFEQ <label> <symb> <symb>
+        elif(current_opcode == "JUMPIFEQ"):
+            label = self.get_argument_value(arg1)
+            value_1 = self.get_argument_value(arg2)
+            value_2 = self.get_argument_value(arg3)
+
+            if(type(value_1) != type(value_2)):
+                sys.exit(53)
+
+            if(value_1 == value_2):
+                jump_destination = self.labels[label]
+                self.counter = int(jump_destination) - 1
+            else:
+                self.counter = self.counter + 1
+        # JUMPIFNEQ <label> <symb> <symb>
+        elif(current_opcode == "JUMPIFNEQ"):
+            label = self.get_argument_value(arg1)
+            value_1 = self.get_argument_value(arg2)
+            value_2 = self.get_argument_value(arg3)
+
+            if(type(value_1) != type(value_2)):
+                sys.exit(53)
+
+            if(value_1 != value_2):
+                jump_destination = self.labels[label]
+                self.counter = int(jump_destination) - 1
+            else:
+                self.counter = self.counter + 1
+        # WRITE <symb>
+        elif(current_opcode == "WRITE"):
+            value = self.get_argument_value(arg1)
+            if(type(value) == bool):
                 pass
-            elif(isinstance(variable, int)):
-                pass
-            elif(isinstance(variable, bool)):
-                pass
-            elif(isinstance(variable, None)):
-                pass
+            else:
+                #value = self.convert_string(value)
+                print(value, end='')
+            self.counter = self.counter + 1
+        # CALL <label>
+        elif(current_opcode == "CALL"):
+            label = self.get_argument_value(arg1)
+            try:
+                jump_destination = self.labels[label]
+                self.counter = int(jump_destination) - 1
+                self.call_stack.append(op_num + 1)
+            except:
+                sys.exit(52)
+        # RETURN
+        elif(current_opcode == "RETURN"):
+            try:
+                self.counter = self.call_stack[len(self.call_stack) - 1]
+                del self.call_stack[-1]
+            except:
+                sys.exit(56)
+        # AND <var> <symb> <symb>
+        elif(current_opcode == "AND"):
+            value_1 = self.get_argument_value(arg2)
+            value_2 = self.get_argument_value(arg3)
+            if(type(value_1) == bool and type(value_2) == bool):
+                result = (value_1 and value_2)
+                self.insert_to_frame(arg1.name, arg1.frame, result)
+            else:
+                sys.exit(53)
+            self.counter = self.counter + 1
+        # OR <var> <symb> <symb>
+        elif(current_opcode == "OR"):
+            value_1 = self.get_argument_value(arg2)
+            value_2 = self.get_argument_value(arg3)
+            if(type(value_1) == bool and type(value_2) == bool):
+                result = (value_1 or value_2)
+                self.insert_to_frame(arg1.name, arg1.frame, result)
+            else:
+                sys.exit(53)
+            self.counter = self.counter + 1
+        # NOT <var> <symb>
+        elif(current_opcode == "NOT"):
+            value_1 = self.get_argument_value(arg2)
+            if(type(value_1) == bool):
+                result = not value_1
+                self.insert_to_frame(arg1.name, arg1.frame, result)
+            else:
+                sys.exit(53)
+            self.counter = self.counter + 1
+
+        #self.debug_print()
+            
+    def escape_sequence(self, numbers):
+        if(int(numbers) < 0 or int(numbers) > 999):
+            sys.exit(57)    ## TODO - check this
+        print(numbers)
+        hex_val = hex(int(numbers))
+        return hex_val
+
+    def convert_string(self, string):
+        state = 0
+        final_string = ""
+        tmp_string = ""
+        numbers = ""
+        for x in range(0, len(string)):
+            #print(string[x])
+            if(string[x] == '\\'):
+                tmp_string = '\\\\'
+                state = 1
+
+            if(state == 1):
+                state = 2
+            elif(state == 2 or state == 3):
+                numbers = numbers + string[x]
+                tmp_string = tmp_string + string[x]
+                state = state + 1
+            elif(state == 4):
+                numbers = numbers + string[x]
+                #esc_seq = self.escape_sequence(numbers)
+                #print(codecs.decode(bytes(esc_seq)).decode('utf-8'))
+                #print("\u0023")
+                #print(esc_seq)
+                #print(bytes(esc_seq, 'utf-8').decode('unicode-escape'))
+                state = 0
+                
+            
+                
+
+            
+        #print(tmp_string)
+
+        return string
 
         
-
-
-        self.debug_print()
 
 
 
@@ -451,9 +655,8 @@ def main():
     
     my_interpret = Interpret(root)
     my_interpret.prepare_labels(root)
-
-    for x in range(0, len(root), 1):
-        my_interpret.execute_instruction(x)
+    my_interpret.start()
+    
 
 if __name__ == '__main__':
     main()

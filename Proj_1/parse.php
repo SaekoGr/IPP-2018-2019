@@ -322,6 +322,7 @@ function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
 }
 #
 function compare_opcode($opcode, $line){
+    #print("$opcode\t$line");
     if(!strcasecmp($opcode, "CREATEFRAME")){        # 0
         return zero_args($opcode, $line);
     }
