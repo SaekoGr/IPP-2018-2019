@@ -3,6 +3,8 @@
 ### TODO - COMMENTS
 ### SYMB
 ### EVALUATE RETURN CODE
+
+
 define('types', array(
     'int',
     'bool',
@@ -12,7 +14,8 @@ define('types', array(
     'type',
     'var'
 ));
-#
+
+# looks for substring in an array, used for stats
 function substr_in_array($needle, array $haystack){
     foreach($haystack as $item){
         if(false !== strpos($item, $needle)){
@@ -21,7 +24,8 @@ function substr_in_array($needle, array $haystack){
     }
     return false;
 }
-# prepares xml document
+
+# prepares xml document, sets indentaion
 function prepare_document($xml){
     xmlwriter_set_indent($xml, 1);
     $res = xmlwriter_set_indent_string($xml, '    ');
@@ -32,6 +36,7 @@ function prepare_document($xml){
     xmlwriter_end_attribute($xml);
     return $xml;
 }
+
 # writes header for instruction
 function write_instruction_header($opcode){
     xmlwriter_start_element($GLOBALS['xml'], "instruction");
@@ -41,6 +46,7 @@ function write_instruction_header($opcode){
     xmlwriter_start_attribute($GLOBALS['xml'], "opcode");
     xmlwriter_text($GLOBALS['xml'], strtoupper($opcode));
 }
+
 # 
 function has_comment($line){
     if(strpos($line, '#') !== false){
@@ -50,6 +56,7 @@ function has_comment($line){
         return false;
     }
 }
+
 # writes argument
 function write_arg($type, $arg_num, $arg){
     xmlwriter_start_element($GLOBALS['xml'], $arg_num);
@@ -59,6 +66,7 @@ function write_arg($type, $arg_num, $arg){
     xmlwriter_text($GLOBALS['xml'], $arg);
     xmlwriter_end_element($GLOBALS['xml']);
 }
+
 # it gets the type in front of the '@' 
 function get_type($arg){
     $type_regex = "/.*(?=@)/";
@@ -72,13 +80,14 @@ function get_type($arg){
     }
     else{
         for($i = 0; $i < count(types); $i++){
-            if(!strcmp($type, types[$i])){
+            if($type == types[$i]){
                 return "$type";
             }
         }
         exit(23);
     }
 }
+
 # checks whether it contains '@'
 function has_at($arg){
     if(strpos($arg, '@') !== false){
@@ -114,31 +123,62 @@ function after_at($arg, $arg_type){
         exit(23);
     }
 }
+
+#
+function check_frame($arg){
+    if(has_at($arg)){
+        $before_at = "/.*(?=@)/";
+        preg_match($before_at, $arg, $match);
+
+        if(!$match){
+            exit(23);
+        }
+        if($match[0] == "GF" || $match[0] == "TF" || $match[0] == "LF"){
+            ;
+        }
+        else{
+            exit(23);
+        }
+    }
+    else{
+        exit(23);
+    }
+}
+
+
 # evaluates arguments, opcodes, sorts it into the xml format
 function evaluate_arg($arg, $arg_type, $arg_num){
     if($arg_type == "symb"){
         $arg_type = get_type($arg);
-        if($arg_type == "error"){
-            exit(23);
-        }
     }
     switch($arg_type){
         case "string":
             $current_string = after_at($arg, $arg_type);
-            if($current_string == 23){
-                exit(23);
-            }
-            else{
-                write_arg($arg_type, $arg_num, $current_string);
-            }
+            write_arg($arg_type, $arg_num, $current_string);
             break;
         case "label":   # no
-        case "type":
             if(has_at($arg)){
                 exit(23);
             }
             else{
                 write_arg($arg_type, $arg_num, $arg);
+            }
+            break;
+        case "type":
+            if(has_at($arg)){
+                exit(23);
+            }
+            else{
+                switch($arg){
+                    case("bool"):
+                    case("string"):
+                    case("int"):
+                    case("nil"):
+                        write_arg($arg_type, $arg_num, $arg);
+                        break;
+                    default:
+                        exit(23);
+                }  
             }
             break;
         case "bool":
@@ -159,6 +199,11 @@ function evaluate_arg($arg, $arg_type, $arg_num){
             write_arg($arg_type, $arg_num, $after_at);
             break;
         case "var":
+            check_frame($arg);
+            $dummy = after_at($arg, $arg_type);
+            if(empty($dummy)){
+                exit(23);
+            }
             write_arg($arg_type, $arg_num, $arg);
             break;
         default:
@@ -166,7 +211,7 @@ function evaluate_arg($arg, $arg_type, $arg_num){
     }
 }
 
-#
+# if string contains comment, it removes it
 function remove_comment($word){
     if(has_comment($word)){
         $before_comment = "/.*(?=#)/";
@@ -177,7 +222,8 @@ function remove_comment($word){
         return $word;
     }
 }
-#
+
+# function removes all unnecessary whitespaces that regex could have picked up
 function remove_whitespaces($word){
     $tmp_word = "";
     for($i = 0; $i < strlen($word); $i++){
@@ -188,6 +234,7 @@ function remove_whitespaces($word){
     }
     return $tmp_word;
 }
+
 # instruction has no arguments
 function zero_args($opcode, $line){
     if(get_next_arg($opcode, $line) == ""){
@@ -198,7 +245,9 @@ function zero_args($opcode, $line){
         exit(23);
     }
 }
-#
+
+# function looks at what we already have a give us the next possible argument
+# implemented, so that there can be multiple arguments that are the same
 function get_next_arg($word, $line){
     if(strpos($word, '\\') !== false){
         $word = str_replace('\\', '\\\\', $word);
@@ -215,7 +264,7 @@ function get_next_arg($word, $line){
     }
 }
 
-#
+# function that works with one arguments
 function one_arg($opcode, $line, $arg1_type){
     $arg1 = remove_comment(get_next_arg($opcode, $line));
     if($arg1 == ""){
@@ -230,6 +279,7 @@ function one_arg($opcode, $line, $arg1_type){
             $GLOBALS['label_counter']++;
         }
     }
+    
     if(get_next_arg($arg1, $line) == ""){
         write_instruction_header($opcode);
         evaluate_arg($arg1, $arg1_type, "arg1");
@@ -239,7 +289,8 @@ function one_arg($opcode, $line, $arg1_type){
         exit(23);
     }
 }
-#
+
+# function that works with two arguments
 function two_args($opcode, $line, $arg1_type, $arg2_type){
     $tmp_state = "";
     $arg1 = get_next_arg($opcode, $line);
@@ -249,6 +300,13 @@ function two_args($opcode, $line, $arg1_type, $arg2_type){
     if($arg1 == "" or $arg2 == ""){
         exit(23);
     }
+
+    if(!strcasecmp($opcode, "READ")){           # 2
+        if($arg2 != "string" && $arg2 != "int" && $arg2 != "bool"){
+            exit(23);
+        }
+    }
+
     if(get_next_arg($tmp_state, $line) == ""){
         write_instruction_header($opcode);
         evaluate_arg($arg1, $arg1_type, "arg1");
@@ -259,7 +317,10 @@ function two_args($opcode, $line, $arg1_type, $arg2_type){
         exit(23);
     }
 }
-#
+
+# function return tmp_string, that is used in order
+# to prevent bad matching with regex
+# when there are multiple arguments, that are the same
 function get_current_state($word_1, $word_2, $line){
     if(strpos($word_1, '\\') !== false){
         $word_1 = str_replace('\\', '\\\\', $word_1);
@@ -278,24 +339,16 @@ function get_current_state($word_1, $word_2, $line){
         return $match[0];
     }
 }
+
 # 
 function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
-    #print("Beginning\n");
     $tmp_state = "";
-
     $arg1 = get_next_arg($opcode, $line);
     $tmp_state = get_current_state($opcode, $arg1, $line);
-    #print("First arg added : $arg1 : $tmp_state\n");
-
     $arg2 = get_next_arg($tmp_state, $line);
     $tmp_state = get_current_state($tmp_state, $arg2, $line);
-    #print("Second arg added : $arg2 : $tmp_state\n");
-
     $arg3 = remove_comment(get_next_arg($tmp_state, $line));
     $tmp_state = get_current_state($tmp_state, $arg3, $line);
-    #print("Third arg added : $arg3 : $tmp_state\n");
-
-    #print("End of parsing arguments : $tmp_state\n");
 
     if($arg1 == "" or $arg2 == "" or $arg3 == ""){
         exit(23);
@@ -320,119 +373,119 @@ function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
         exit(23);
     }
 }
-#
+
+# compares the opcode and calls appropriate function
 function compare_opcode($opcode, $line){
-    #print("$opcode\t$line");
     if(!strcasecmp($opcode, "CREATEFRAME")){        # 0
-        return zero_args($opcode, $line);
+        zero_args($opcode, $line);
     }
     elseif(!strcasecmp($opcode, "PUSHFRAME")){      # 0
-        return zero_args($opcode, $line);
+        zero_args($opcode, $line);
     }
     elseif(!strcasecmp($opcode, "POPFRAME")){       # 0
-        return zero_args($opcode, $line);
+        zero_args($opcode, $line);
     }
     elseif(!strcasecmp($opcode, "RETURN")){         # 0
-        return zero_args($opcode, $line);
+        zero_args($opcode, $line);
     }
     elseif(!strcasecmp($opcode, "BREAK")){          # 0
-        return zero_args($opcode, $line);
+        zero_args($opcode, $line);
     }
     elseif(!strcasecmp($opcode, "DEFVAR")){         # 1
-        return one_arg($opcode, $line, "var");
+        one_arg($opcode, $line, "var");
     }
     elseif(!strcasecmp($opcode, "CALL")){           # 1
-        return one_arg($opcode, $line, "label");
+        one_arg($opcode, $line, "label");
     }
     elseif(!strcasecmp($opcode, "PUSHS")){          # 1
-        return one_arg($opcode, $line, "symb");
+        one_arg($opcode, $line, "symb");
     }
     elseif(!strcasecmp($opcode, "POPS")){           # 1
-        return one_arg($opcode, $line, "var");
+        one_arg($opcode, $line, "var");
     }
     elseif(!strcasecmp($opcode, "EXIT")){           # 1
-        return one_arg($opcode, $line, "symb");
+        one_arg($opcode, $line, "symb");
     }
     elseif(!strcasecmp($opcode, "DPRINT")){         # 1
-        return one_arg($opcode, $line, "symb");
+        one_arg($opcode, $line, "symb");
     }
     elseif(!strcasecmp($opcode, "LABEL")){          # 1
-        return one_arg($opcode, $line, "label");
+        one_arg($opcode, $line, "label");
     }
     elseif(!strcasecmp($opcode, "JUMP")){           # 1
-        return one_arg($opcode, $line, "label");
+        one_arg($opcode, $line, "label");
     }
     elseif(!strcasecmp($opcode, "WRITE")){          # 1
-        return one_arg($opcode, $line, "symb");
+        one_arg($opcode, $line, "symb");
     }
     elseif(!strcasecmp($opcode, "MOVE")){           # 2
-        return two_args($opcode, $line, "var", "symb");
+        two_args($opcode, $line, "var", "symb");
     }
     elseif(!strcasecmp($opcode, "INT2CHAR")){       # 2
-        return two_args($opcode, $line, "var", "symb");
+        two_args($opcode, $line, "var", "symb");
     }
     elseif(!strcasecmp($opcode, "READ")){           # 2
-        return two_args($opcode, $line, "var", "type");
+        two_args($opcode, $line, "var", "type");
     }
     elseif(!strcasecmp($opcode, "STRLEN")){         # 2
-        return two_args($opcode, $line, "var", "symb");
+        two_args($opcode, $line, "var", "symb");
     }
     elseif(!strcasecmp($opcode, "TYPE")){           # 2
-        return two_args($opcode, $line, "var", "symb");
+        two_args($opcode, $line, "var", "symb");
     }
     elseif(!strcasecmp($opcode, "NOT")){            # 2
-        return two_args($opcode, $line, "var", "symb");
+        two_args($opcode, $line, "var", "symb");
     }
     elseif(!strcasecmp($opcode, "ADD")){            # 3
-        return three_args($opcode, $line, "var", "symb", "symb");
+        three_args($opcode, $line, "var", "symb", "symb");
     }
     elseif(!strcasecmp($opcode, "SUB")){            # 3
-        return three_args($opcode, $line, "var", "symb", "symb");
+        three_args($opcode, $line, "var", "symb", "symb");
     }
     elseif(!strcasecmp($opcode, "MUL")){            # 3
-        return three_args($opcode, $line, "var", "symb", "symb");
+        three_args($opcode, $line, "var", "symb", "symb");
     }
     elseif(!strcasecmp($opcode, "IDIV")){           # 3
-        return three_args($opcode, $line, "var", "symb", "symb");
+        three_args($opcode, $line, "var", "symb", "symb");
     }
     elseif(!strcasecmp($opcode, "LT")){             # 3
-        return three_args($opcode, $line, "var", "symb", "symb");
+        three_args($opcode, $line, "var", "symb", "symb");
     }
     elseif(!strcasecmp($opcode, "GT")){             # 3
-        return three_args($opcode, $line, "var", "symb", "symb");
+        three_args($opcode, $line, "var", "symb", "symb");
     }
     elseif(!strcasecmp($opcode, "EQ")){             # 3
-        return three_args($opcode, $line, "var", "symb", "symb");
+        three_args($opcode, $line, "var", "symb", "symb");
     }
     elseif(!strcasecmp($opcode, "AND")){            # 3
-        return three_args($opcode, $line, "var", "symb", "symb");
+        three_args($opcode, $line, "var", "symb", "symb");
     }
     elseif(!strcasecmp($opcode, "OR")){             # 3
-        return three_args($opcode, $line, "var", "symb", "symb");
+        three_args($opcode, $line, "var", "symb", "symb");
     }
     elseif(!strcasecmp($opcode, "STRI2INT")){       # 3
-        return three_args($opcode, $line, "var", "symb", "symb");
+        three_args($opcode, $line, "var", "symb", "symb");
     }
     elseif(!strcasecmp($opcode, "CONCAT")){         # 3
-        return three_args($opcode, $line, "var", "symb", "symb");
+        three_args($opcode, $line, "var", "symb", "symb");
     }
     elseif(!strcasecmp($opcode, "GETCHAR")){        # 3
-        return three_args($opcode, $line, "var", "symb", "symb");
+        three_args($opcode, $line, "var", "symb", "symb");
     }
     elseif(!strcasecmp($opcode, "SETCHAR")){        # 3
-        return three_args($opcode, $line, "var", "symb", "symb");
+        three_args($opcode, $line, "var", "symb", "symb");
     }
     elseif(!strcasecmp($opcode, "JUMPIFEQ")){       # 3
-        return three_args($opcode, $line, "label", "symb", "symb");
+        three_args($opcode, $line, "label", "symb", "symb");
     }
     elseif(!strcasecmp($opcode, "JUMPIFNEQ")){      # 3
-        return three_args($opcode, $line, "label", "symb", "symb");
+        three_args($opcode, $line, "label", "symb", "symb");
     }
     else{
         exit(22);
     }
-    return 0;
 }
+
 # look whether the line is comment
 function is_one_line_comment($line){
     $comment_regex = "/[ \t]*#.*/";
@@ -450,7 +503,8 @@ function is_one_line_comment($line){
         return false;
     }
 }
-#
+
+# checks, whether line contains only 1 whitespace and nothing else
 function check_whitespaces($line){
     $size_line = strlen($line);
     for($i = 0; $i < $size_line; $i++){
@@ -458,6 +512,8 @@ function check_whitespaces($line){
             case "\t":
             case "\s":
             case "\n":
+            case " ":
+            case ' ':
                 break;
             default:
                 return false;
@@ -465,6 +521,7 @@ function check_whitespaces($line){
     }
     return true;
 }
+
 # processes each line
 function process_line($line){
     # check for one line comment
@@ -477,12 +534,14 @@ function process_line($line){
     if(check_whitespaces($line)){
         return 0;
     }
+
+    # uses regex to extract the opcode
     $opcode_regex = "/^[\s]*([a-zA-Z2]*)/";
     preg_match($opcode_regex, $line, $match);
-    
     $opcode = $match[count($match)-1];
-    return compare_opcode($opcode, $line);
+    compare_opcode($opcode, $line);
 }
+
 # functions for help
 function print_help(){
     fwrite(STDOUT, "Usage: php7.3 parse.php < file\n");
@@ -496,31 +555,37 @@ function get_path($full_string){
 #                           #
 #           MAIN            #
 #                           #
+# variables for stats
 $stats = false;
 $loc = false;
 $comments = false;
 $labels = false;
 $jumps = false;
 $stats_path = "";
+# stats counters
 $loc_counter = 0;
 $comment_counter = 0;
 $label_counter = 0;
 $jump_counter = 0;
 $stats_array = [];
 $label_array = [];
+
 # parsing the input arguments
 if($argc == 1){                 # no arguments, wait for stdin
-    ;
-}
+    $f = fopen('php://stdin', 'r');
+    if(!$f){
+        fwrite(STDERR, "Error opening file\n");
+    }
+}   # checks whether help was called for
 elseif($argv[1] === "--help"){   # help argument
-    if($argc != 2)  
+    if($argc != 2)  # there was help called but also other arguments = error
         exit(10);
     else
-        exit(print_help());
+        exit(print_help()); # normally prints out help
 }
-else{
-    if(substr_in_array("--stats=", $argv)){
-        foreach($argv as $item){
+else{   # tries to find substring in the input arguments
+    if(substr_in_array("--stats=", $argv)){ # we require stats as well
+        foreach($argv as $item){            # creates the appropriate string
             if(strpos($item, "--stats=") !== false){
                 $stats = true;
                 $stats_path = get_path($item);
@@ -550,43 +615,43 @@ else{
             }
         }
     }
-    else{
-        #fwrite(STDERR, "Invalid arguments\n");
+    else{   # arguments were not even stats, error
+        fwrite(STDERR, "Invalid arguments\n");
         exit(10);
     }
 }
-$f = fopen('php://stdin', 'r');
-    if(!$f){
-        #fwrite(STDERR, "Error opening file\n");
-}
+
 # check the header
 $fh = fgets($f);
-if($fh == ".IPPcode19\n"){
-    ;
-}
-else{
+$fh = remove_comment($fh);
+$fh = remove_whitespaces($fh);
+if($fh != ".IPPcode19\n" && $fh != ".IPPcode19"){
     fwrite(STDERR, "Header is missing or incorrect\n");
     exit(21);
 }
+
 # prepare xml document
 $xml = xmlwriter_open_memory();
 $xml = prepare_document($xml);
 $instruction_counter = 1;
+
 # reading line by line and processing it
 while(($line = fgets($f)) != false){
-    
-    $ret_code = process_line($line);
-    if($ret_code == 22){
-        fwrite(STDERR, "Incorrect or uknown opcode\n");
-        exit($ret_code);
-    }
-    elseif($ret_code == 23){
-        fwrite(STDERR, "Lexical or syntactical error\n");
-        exit($ret_code);
-    }
+    process_line($line);
 }
+
+# outputs the stats
 if($stats){
-    $st = fopen($stats_path, 'w');
+    # creates the file if it doesn't exist
+    if(file_exists($stats_path)){
+        $st = fopen($stats_path, 'w');
+    }
+    else{
+        exec('touch ' . $stats_path);
+        $st = fopen($stats_path, 'w');
+    }
+    
+    # output the appropriate statistics
     foreach($stats_array as $item){
         if(strpos($item, "--loc") !== false){
             $loc_counter = ($instruction_counter - 1);
@@ -608,6 +673,7 @@ if($stats){
     }
     fclose($st);
 }
+
 # close xml document
 xmlwriter_end_element($xml);
 xmlwriter_end_document($xml);

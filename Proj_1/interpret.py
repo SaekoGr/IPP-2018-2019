@@ -93,7 +93,35 @@ class Operand:
 #
 class Interpret:
     #
-    def __init__(self, root):
+    def __init__(self):
+        # parse arguments
+        self.arg = Arguments(sys.argv[1:])
+
+        if(self.arg.input):
+            self.arg.i_f = open(self.arg.input_file, "r")
+        else:
+            self.arg.i_f = sys.stdin
+            
+
+        if(self.arg.source):
+            self.arg.s_f = open(self.arg.source, "r")
+            try:
+                tree = ET.parse(self.arg.source_file)
+            except:
+                exit(31)
+        else:
+            try:
+                tree = ET.parse(sys.stdin)
+            except:
+                exit(31)
+
+        try:
+            root = tree.getroot()
+            if(root.attrib['language'] != "IPPcode19"):
+                exit(32)
+        except:
+            exit(31)
+
         self.global_frame = {}
         self.local_frames = []
         self.data_stack = []
@@ -102,14 +130,14 @@ class Interpret:
         self.call_stack = []
 
     #
-    def prepare_labels(self, root):
+    def prepare_labels(self):
         try:
-            for i in range(0, len(root)):
-                if(root[i].attrib['opcode'] == "LABEL"):
-                    for child in root[i]:
+            for i in range(0, len(self.root)):
+                if(self.root[i].attrib['opcode'] == "LABEL"):
+                    for child in self.root[i]:
                         if(child.text in self.labels):
                             exit(52)
-                        self.labels.update({child.text : root[i].attrib['order']})
+                        self.labels.update({child.text : self.root[i].attrib['order']})
         except:
             sys.exit(32)
 
@@ -213,6 +241,13 @@ class Interpret:
         while self.counter < len(self.root):
             self.execute_instruction(self.counter)
 
+        # close the files
+        if(self.arg.input):
+            self.arg.i_f.close()
+
+        if(self.arg.source):
+            self.arg.s_f.close()
+
 
     #
     def execute_instruction(self, op_num):
@@ -235,9 +270,6 @@ class Interpret:
             arg3 = Operand(self.root[op_num][2])
         else:
             exit(32)
-
-
-    
 
         # CREATEFRAME
         if(current_opcode == "CREATEFRAME"):
@@ -534,10 +566,14 @@ class Interpret:
         elif(current_opcode == "WRITE"):
             value = self.get_argument_value(arg1)
             if(type(value) == bool):
-                pass
+                pass            # TODO
             else:
-                #value = self.convert_string(value)
-                print(value, end='')
+                value = str(value)
+                try:
+                    value = self.replace_decimal_escapes(value)
+                except:
+                    pass
+                print(value, end='', flush=True)
             self.counter = self.counter + 1
         # CALL <label>
         elif(current_opcode == "CALL"):
@@ -584,77 +620,87 @@ class Interpret:
             else:
                 sys.exit(53)
             self.counter = self.counter + 1
+        # READ <var> <type>
+        elif(current_opcode == "READ"):
+            if(self.arg.input):
+                line = self.arg.i_f.readline()
+                try:
+                    if(line[len(line) - 1] == '\n'):
+                        line = line[:-1]
+                    line = input()
+                    if(arg2.value == "bool"):
+                        if(line == "true"):
+                            line = True
+                        elif(line == "false"):
+                            line = False
+                        else:
+                            line = False
+                    elif(arg2.value == "int"):
+                        if(line.isdigit()):
+                            line = int(line)
+                        else:
+                            line = 0
+                    elif(arg2.value == "string"):
+                        if(isinstance(line, str)):
+                            pass
+                        else:
+                            line = ""
+                    else:
+                        sys.exit(53)
+                except:
+                    if(arg2.value == "bool"):
+                        line = False
+                    elif(arg2.value == "int"):
+                        line = 0
+                    elif(arg2.value == "string"):
+                        line = ""
+                    else:
+                        sys.exit(53)
+            else:
+                line = input()
+                if(arg2.value == "bool"):
+                    if(line == "true"):
+                        line = True
+                    elif(line == "false"):
+                        line = False
+                    else:
+                        line = False
+                elif(arg2.value == "int"):
+                    if(line.isdigit()):
+                        line = int(line)
+                    else:
+                        line = 0
+                elif(arg2.value == "string"):
+                    if(isinstance(line, str)):
+                        pass
+                    else:
+                        line = ""
+                else:
+                    sys.exit(53)
+
+            self.insert_to_frame(arg1.name, arg1.frame, line)
+            self.counter = self.counter + 1
 
         #self.debug_print()
+
+    def replace_decimal_escapes(self, s):
+        return re.sub(
+        r"\\(\d\d\d)",
+        lambda x: chr(int(x.group(1), 10)), 
+        s
+    )
             
-    def escape_sequence(self, numbers):
-        if(int(numbers) < 0 or int(numbers) > 999):
-            sys.exit(57)    ## TODO - check this
-        print(numbers)
-        hex_val = hex(int(numbers))
-        return hex_val
 
-    def convert_string(self, string):
-        state = 0
-        final_string = ""
-        tmp_string = ""
-        numbers = ""
-        for x in range(0, len(string)):
-            #print(string[x])
-            if(string[x] == '\\'):
-                tmp_string = '\\\\'
-                state = 1
-
-            if(state == 1):
-                state = 2
-            elif(state == 2 or state == 3):
-                numbers = numbers + string[x]
-                tmp_string = tmp_string + string[x]
-                state = state + 1
-            elif(state == 4):
-                numbers = numbers + string[x]
-                #esc_seq = self.escape_sequence(numbers)
-                #print(codecs.decode(bytes(esc_seq)).decode('utf-8'))
-                #print("\u0023")
-                #print(esc_seq)
-                #print(bytes(esc_seq, 'utf-8').decode('unicode-escape'))
-                state = 0
-                
-            
-                
-
-            
-        #print(tmp_string)
-
-        return string
 
         
-
-
-
 #
 def main():
     if(len(sys.argv) == 1 or len(sys.argv) > 4):
         sys.stderr.write("Invalid arguments\n")
         sys.exit(10)
 
-    # parse arguments
-    arg = Arguments(sys.argv[1:])
-
-    try:
-        tree = ET.parse(arg.source_file)
-    except:
-        exit(31)
-
-    try:
-        root = tree.getroot()
-        if(root.attrib['language'] != "IPPcode19"):
-            exit(32)
-    except:
-        exit(31)
-    
-    my_interpret = Interpret(root)
-    my_interpret.prepare_labels(root)
+    my_interpret = Interpret()
+    my_interpret.prepare_labels()
     my_interpret.start()
     
 

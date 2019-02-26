@@ -15,9 +15,11 @@ Login: xgregu02
 \end{center}
 
 \section*{Introduction}
-My task was to create a script  in PHP for lexical and syntactical analysis of language IPPcode19 that is derivated from IFJcode18
+My task was to create a script  in PHP for lexical and syntactical analysis of language IPPcode19 that is derivated from IFJcode18.
 \section*{My Solution}
 I started implementing \texttt{parser.php} as soon as possible, so that I would have more time on other projects during the semester. My script \texttt{parser.php} starts with opening file that was given in \texttt{STDIN} or accepting input from \texttt{STDIN}. After succesfully opening/accepting the input, the script reads the first line to confirm that it contains the correct header. If the header is correct, I initialize memory for the \texttt{XML} output by using functions from \texttt{XMLWriter}, which formats the output accordingly. It only outputs the \texttt{XML} document if no error was encountered during lexical and syntactical analysis.
 
-The input is read line by line and I've used regular expressions to extract the opcode and check whether it's acceptable. I implemented functions that handle zero, one, two or three arguments and each of them checks whether the argument type matches the required type(s) for given opcode. Each argument is chcecked lexically and I've implemented function \texttt{write\_arg} in order to make writing the arguments in \texttt{XML} easier and quicker. I've created
+The input is read line by line and I've used regular expressions to extract the opcode and check whether it's acceptable. I implemented functions that handle zero, one, two or three arguments and each of them checks whether the argument type matches the required type(s) for given opcode. Each argument is chcecked lexically and I've implemented function \texttt{write\_arg} in order to make writing the arguments in \texttt{XML} easier and quicker.
+
+While checking the arguments, I made sure to also check the number of arguments. Script can finish succesfully only if there's exactly the number of arguments that the instruction needs. 
 \end{document}
