@@ -1,7 +1,7 @@
 #!/usr/bin/env php
 <?php
 
-#
+# checks for substring in an array
 function substr_in_array($needle, array $haystack){
     foreach($haystack as $item){
         if(false !== strpos($item, $needle)){
@@ -11,14 +11,14 @@ function substr_in_array($needle, array $haystack){
     return true;
 }
 
-#
+# gets full path
 function get_path($full_string){
     $path_regex = "/(?<==).*/";
     preg_match($path_regex, $full_string, $match);
     return $match[0];
 }
 
-#
+# prints out help
 function print_help(){
     fwrite(STDOUT, "Script is run as: php test.php\n");
     fwrite(STDOUT, "With optional parameters:\n");
@@ -31,6 +31,7 @@ function print_help(){
     fwrite(STDOUT, "--int-only : only tests iterpreter; cannot be combined with --parse-only\n");
 }
 
+# generates html head
 function generate_html_head(){
     echo "<!DOCTYPE html>\n";
     echo "<html>\n";
@@ -92,8 +93,8 @@ function generate_html_head(){
     echo "            </tr>\n";
 }
 
+# adds the html tail
 function generate_html_tail(){
-    #### eding here
     $all_tests = $GLOBALS['total_counter'];
     $ok_tests = $GLOBALS['passed_counter'];
     $fail = $GLOBALS['failed_counter'];
@@ -129,14 +130,19 @@ function generate_html_tail(){
     echo "</html>\n";
 }
 
-# 
+# generates all the output
 function prepare_html(){
     generate_html_head();
     Tests::run_tests($GLOBALS['directory_path']);
     generate_html_tail();
 }
 
-#
+
+#                           #
+#           MAIN            #
+#                           #
+
+# array of all possible arguments
 $arguments = array(
     "test.php" => false,
     "--help" => false,
@@ -188,6 +194,7 @@ if($arguments["--parse-only"] == true and $arguments["--int-only"] == true){
     return 10;
 }
 
+# check for help and correct number of arguments
 if($arguments["--help"] == true){
     if($argc != 2){
         fwrite(STDERR, "--help cannot be combined with other arguments\n");
@@ -212,6 +219,7 @@ if(empty($int_script)){
     $int_script = getcwd() . "/interpret.py";
 }
 
+
 # check their existence
 if(!file_exists($directory_path)){
     fwrite(STDERR, "$directory_path doesn't exist\n");
@@ -228,40 +236,40 @@ if(!file_exists($int_script)){
     return 11;
 }
 
+# prepares the top part of html and css
 prepare_html();
 
+# class for all the tests
 class Tests{
+    # runs tests for the current directory
     public static function run_tests($directory_path){
         $arguments = $GLOBALS['arguments'];
-        
-
+        # open particular directory
         $dir_handle = opendir($directory_path);
         
+        # reads file from the current directory
         while($current_file = readdir($dir_handle)){
-            $tmp_argv = $GLOBALS['arguments']; # TODO
-            #echo "$current_file\n";
             # just skip the . and .. files
             if($current_file == "." or $current_file == ".."){
                 continue;
             }
             
-            #echo "$directory_path . "/" . $current_file";
+            # check whether it is directory, if yes, check for the recursive parameter
             if(is_dir("$directory_path" . "/" . "$current_file") and $arguments['--recursive']){
-                self::run_tests("$directory_path" . "/" . "$current_file");
-            }
+                self::run_tests("$directory_path" . "/" . "$current_file"); # resursiveley call this function
+            }   # we found a file
             elseif(is_file("$directory_path" . "/" . "$current_file")){
-                
                 $full_path = "$directory_path" . "/" . "$current_file";
                 $extension = pathinfo($full_path, PATHINFO_EXTENSION);
-                if($extension == "src"){
-                    #print("We found our file, yay!!! $full_path\n");
+                if($extension == "src"){    # our file has the appropriate extension
                     self::prepare_files(pathinfo($full_path, PATHINFO_FILENAME), $directory_path);
-                    self::run_test($directory_path, pathinfo($full_path, PATHINFO_FILENAME), $tmp_argv['--parse-only'], $tmp_argv['--int-only']);
+                    self::run_test($directory_path, pathinfo($full_path, PATHINFO_FILENAME), $arguments['--parse-only'], $arguments['--int-only']);
                 }
             }
         }
     }
 
+    # checks for existence of all the other files, if not, generate new
     public static function prepare_files($file_name, $directory_path){
         if(!file_exists("$directory_path" . "/" . "$file_name" . ".in")){ # .in file
             touch("$directory_path" . "/" . "$file_name" . ".in");
@@ -287,6 +295,7 @@ class Tests{
         return $is_ok;
     }
 
+    # runs that particular code
     public static function run_test($directory_path, $file, $parse_only, $int_only){
         $GLOBALS['total_counter']++;
         $test_num = $GLOBALS['total_counter'];
@@ -299,8 +308,7 @@ class Tests{
         fclose($f);
 
         if($parse_only){    # we test only parser
-            #echo 'php ' . $GLOBALS['parse_script'] . ' < ' . $directory_path . '/' . $file . '.src' . ' > ' . 'tmp_output_test' . '\n';
-            exec('php ' . $GLOBALS['parse_script'] . ' < ' . $directory_path . '/' . $file . '.src > tmp_output_test', $exit_array, $exit_code); ### !!!!!!!!!!!! PHPHP VERSION
+            exec('php7.3 ' . $GLOBALS['parse_script'] . ' < ' . $directory_path . '/' . $file . '.src > tmp_output_test', $exit_array, $exit_code); ### !!!!!!!!!!!! PHPHP VERSION
             if($exit_code == $expected_rc){
                 if($exit_code == 0){    # also check the output
                     exec('java -jar jexamxml.jar tmp_output_test ' . $directory_path . "/" . $file . ".out > tmp_xml_test");
@@ -313,12 +321,12 @@ class Tests{
                         self::test_result($test_num, $directory_path . "/" . $file, $file, false);
                     }
                     exec('rm -f tmp_xml_test');
-                }
+                } # don't check the output
                 else{
                     $GLOBALS['passed_counter']++;
                     self::test_result($test_num, $directory_path . "/" . $file, $file, true);
                 }
-            }
+            }   # even the return codes didn't match
             else{
                 $GLOBALS['failed_counter']++;
                 self::test_result($test_num, $directory_path . "/" . $file, $file, false);
@@ -328,7 +336,7 @@ class Tests{
         elseif($int_only){  # we test only interpreter
             exec('python ' . $GLOBALS['int_script'] . '--source=' . $file . '.src input=' . $file . '.in > tmp_output_test', $exit_array, $exit_code); #### PYTHON VERSION
             if($exit_code == $expected_rc){
-                if($exit_code == 0){
+                if($exit_code == 0){    # also check the output
                     exec('diff tmp_output_test ' . $directory_path . "/" . $file . ".out > tmp_diff_output");
                     if(0 == filesize("tmp_diff_output")){
                         $GLOBALS['passed_counter']++;
@@ -339,23 +347,23 @@ class Tests{
                         self::test_result($test_num, $directory_path . "/" . $file, $file, false);
                     }
                     exec('rm -f tmp_diff_output');
-                }
+                }   # don't check the output
                 else{
                     $GLOBALS['passed_counter']++;
                     self::test_result($test_num, $directory_path . "/" . $file, $file, true);
                 }
             }
-            else{
+            else{   # the return codes didn't match at all
                 $GLOBALS['failed_counter']++;
                 self::test_result($test_num, $directory_path . "/" . $file, $file, false);
             }
             exec('rm -f tmp_output_test');
         }
         else{               # testing both
-            exec('php ' . $GLOBALS['parse_script'] . ' < ' . $directory_path . '/' . $file . '.src > tmp_output_test_php', $exit_array, $exit_code); ### !!!!!!!!!!!! PHPHP VERSION
+            exec('php7.3 ' . $GLOBALS['parse_script'] . ' < ' . $directory_path . '/' . $file . '.src > tmp_output_test_php', $exit_array, $exit_code); ### !!!!!!!!!!!! PHPHP VERSION
             exec('python ' . $GLOBALS['int_script'] . ' --source=tmp_output_test_php input=' . $file . '.in > tmp_output_test', $exit_array, $exit_code); #### PYTHON VERSION
             if($exit_code == $expected_rc){
-                if($exit_code == 0){
+                if($exit_code == 0){ # also check the output
                     exec('diff tmp_output_test ' . $directory_path . "/" . $file . ".out > tmp_diff_output");
                     if(0 == filesize("tmp_diff_output")){
                         $GLOBALS['passed_counter']++;
@@ -366,12 +374,12 @@ class Tests{
                         self::test_result($test_num, $directory_path . "/" . $file, $file, false);
                     }
                     exec('rm -f tmp_diff_output');
-                }
+                }   # don't check the output
                 else{
                     $GLOBALS['passed_counter']++;
                     self::test_result($test_num, $directory_path . "/" . $file, $file, true);
                 }
-            }
+            }   # the return codes didn't even match
             else{
                 $GLOBALS['failed_counter']++;
                 self::test_result($test_num, $directory_path . "/" . $file, $file, false);
@@ -380,6 +388,7 @@ class Tests{
         }
     }
 
+    # function for concatenating the test result to our html
     public static function test_result($num, $path, $file, $result){
         echo "            <tr>\n";
         echo "                <td>$num</td>\n";
@@ -394,13 +403,4 @@ class Tests{
         echo "            </tr>\n";
     }
 }
-
-
-#var_dump($arguments);
-#echo "Directory path is $directory_path\n";
-#echo "Parse script is $parse_script\n";
-#echo "Int script is $int_script\n";
-
-
-
 ?>

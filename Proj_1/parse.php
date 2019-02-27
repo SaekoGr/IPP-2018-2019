@@ -4,7 +4,7 @@
 ### SYMB
 ### EVALUATE RETURN CODE
 
-
+# array for all the types
 define('types', array(
     'int',
     'bool',
@@ -47,7 +47,7 @@ function write_instruction_header($opcode){
     xmlwriter_text($GLOBALS['xml'], strtoupper($opcode));
 }
 
-# 
+# checks whether line contains comment
 function has_comment($line){
     if(strpos($line, '#') !== false){
         return true;
@@ -97,6 +97,7 @@ function has_at($arg){
         return false;
     }
 }
+
 # gets everything after '@'
 function after_at($arg, $arg_type){
     if(has_at($arg)){
@@ -124,7 +125,7 @@ function after_at($arg, $arg_type){
     }
 }
 
-#
+# check whether the frame is correctly written
 function check_frame($arg){
     if(has_at($arg)){
         $before_at = "/.*(?=@)/";
@@ -148,9 +149,12 @@ function check_frame($arg){
 
 # evaluates arguments, opcodes, sorts it into the xml format
 function evaluate_arg($arg, $arg_type, $arg_num){
+    # look at what type it is when it can be variable or constant
     if($arg_type == "symb"){
         $arg_type = get_type($arg);
     }
+
+    # check all possible types
     switch($arg_type){
         case "string":
             $current_string = after_at($arg, $arg_type);
@@ -237,6 +241,7 @@ function remove_whitespaces($word){
 
 # instruction has no arguments
 function zero_args($opcode, $line){
+    # check for too many arguments
     if(get_next_arg($opcode, $line) == ""){
         write_instruction_header($opcode);
         xmlwriter_end_element($GLOBALS['xml']);
@@ -266,10 +271,15 @@ function get_next_arg($word, $line){
 
 # function that works with one arguments
 function one_arg($opcode, $line, $arg1_type){
+    # obtain 1 argument
     $arg1 = remove_comment(get_next_arg($opcode, $line));
+
+    # check whether it exists
     if($arg1 == ""){
         exit(23);
     }
+
+    # counters for statistics
     if(!strcasecmp($opcode, "JUMP") and $GLOBALS['stats'] and $GLOBALS['jumps']){
         $GLOBALS['jump_counter']++;
     }
@@ -280,7 +290,9 @@ function one_arg($opcode, $line, $arg1_type){
         }
     }
     
+    # check for too many arguments
     if(get_next_arg($arg1, $line) == ""){
+        # we can write it to xml
         write_instruction_header($opcode);
         evaluate_arg($arg1, $arg1_type, "arg1");
         xmlwriter_end_element($GLOBALS['xml']);
@@ -292,22 +304,28 @@ function one_arg($opcode, $line, $arg1_type){
 
 # function that works with two arguments
 function two_args($opcode, $line, $arg1_type, $arg2_type){
+    # obtain 2 arguments
     $tmp_state = "";
     $arg1 = get_next_arg($opcode, $line);
     $tmp_state = get_current_state($opcode, $arg1, $line);
     $arg2 = remove_comment(get_next_arg($arg1, $line));
     $tmp_state = get_current_state($tmp_state, $arg2, $line);
+
+    # check whether both exist
     if($arg1 == "" or $arg2 == ""){
         exit(23);
     }
 
+    # special check for read function
     if(!strcasecmp($opcode, "READ")){           # 2
         if($arg2 != "string" && $arg2 != "int" && $arg2 != "bool"){
             exit(23);
         }
     }
 
+    # check for too many arguments
     if(get_next_arg($tmp_state, $line) == ""){
+        # we can write it to our xml
         write_instruction_header($opcode);
         evaluate_arg($arg1, $arg1_type, "arg1");
         evaluate_arg($arg2, $arg2_type, "arg2");
@@ -322,6 +340,8 @@ function two_args($opcode, $line, $arg1_type, $arg2_type){
 # to prevent bad matching with regex
 # when there are multiple arguments, that are the same
 function get_current_state($word_1, $word_2, $line){
+    # if word contains backslash, we duplicate it, then remove it
+    # so that regex would work correctly
     if(strpos($word_1, '\\') !== false){
         $word_1 = str_replace('\\', '\\\\', $word_1);
     }
@@ -340,8 +360,9 @@ function get_current_state($word_1, $word_2, $line){
     }
 }
 
-# 
+# function that works with 3 arguments
 function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
+    # obtain 3 arguments
     $tmp_state = "";
     $arg1 = get_next_arg($opcode, $line);
     $tmp_state = get_current_state($opcode, $arg1, $line);
@@ -350,9 +371,12 @@ function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
     $arg3 = remove_comment(get_next_arg($tmp_state, $line));
     $tmp_state = get_current_state($tmp_state, $arg3, $line);
 
+    # check whether they exist
     if($arg1 == "" or $arg2 == "" or $arg3 == ""){
         exit(23);
     }
+
+    # counters for statistics
     if(!strcasecmp($opcode, "JUMPIFEQ") and $GLOBALS['stats'] and $GLOBALS['jumps']){
         $GLOBALS['jump_counter']++;
     }
@@ -360,16 +384,16 @@ function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
         $GLOBALS['jump_counter']++;
     }
 
-    if(get_next_arg($tmp_state, $line) == ""){;
+    # check if there are not too many arguments
+    if(get_next_arg($tmp_state, $line) == ""){
+            # all is correct, we can write it to our xml
             write_instruction_header($opcode);
             evaluate_arg($arg1, $arg1_type, "arg1");
             evaluate_arg($arg2, $arg2_type, "arg2");
             evaluate_arg($arg3, $arg3_type, "arg3");
-            
             xmlwriter_end_element($GLOBALS['xml']);
-            
     }
-    else{
+    else{   # too many arguments, error
         exit(23);
     }
 }
@@ -547,11 +571,15 @@ function print_help(){
     fwrite(STDOUT, "Usage: php7.3 parse.php < file\n");
     exit(0);
 }
+
+# help function for getting the path to a file
 function get_path($full_string){
     $path_regex = "/(?<==).*/";
     preg_match($path_regex, $full_string, $match);
     return $match[0];
 }
+
+
 #                           #
 #           MAIN            #
 #                           #
