@@ -283,18 +283,6 @@ class Tests{
         }
     }
 
-    public static function evaluate_xml_result(){
-        $is_ok = false;
-        $xml_test = fopen("tmp_xml_test", 'r');
-        $line_test = "";
-        while(($line_test = fgets($xml_test)) != false){
-            if($line_test == "Two files are identical" or $line_test == "Two files are identical\n"){
-                $is_ok = true;
-            }
-        }
-        return $is_ok;
-    }
-
     # runs that particular code
     public static function run_test($directory_path, $file, $parse_only, $int_only){
         $GLOBALS['total_counter']++;
@@ -311,8 +299,8 @@ class Tests{
             exec('php7.3 ' . $GLOBALS['parse_script'] . ' < ' . $directory_path . '/' . $file . '.src > tmp_output_test', $exit_array, $exit_code); ### !!!!!!!!!!!! PHPHP VERSION
             if($exit_code == $expected_rc){
                 if($exit_code == 0){    # also check the output
-                    exec('java -jar jexamxml.jar tmp_output_test ' . $directory_path . "/" . $file . ".out > tmp_xml_test");
-                    if(self::evaluate_xml_result()){
+                    exec('xmldiff tmp_output_test ' . $directory_path . "/" . $file . ".out > tmp_xml_test");
+                    if("\n" == file_get_contents("tmp_xml_test")){
                         $GLOBALS['passed_counter']++;
                         self::test_result($test_num, $directory_path . "/" . $file, $file, true);
                     }
@@ -334,7 +322,7 @@ class Tests{
             exec('rm -f tmp_output_test');
         }
         elseif($int_only){  # we test only interpreter
-            exec('python ' . $GLOBALS['int_script'] . '--source=' . $file . '.src input=' . $file . '.in > tmp_output_test', $exit_array, $exit_code); #### PYTHON VERSION
+            exec('python3.6 ' . $GLOBALS['int_script'] . '--source=' . $file . '.src input=' . $file . '.in > tmp_output_test', $exit_array, $exit_code); #### PYTHON VERSION
             if($exit_code == $expected_rc){
                 if($exit_code == 0){    # also check the output
                     exec('diff tmp_output_test ' . $directory_path . "/" . $file . ".out > tmp_diff_output");
@@ -361,7 +349,7 @@ class Tests{
         }
         else{               # testing both
             exec('php7.3 ' . $GLOBALS['parse_script'] . ' < ' . $directory_path . '/' . $file . '.src > tmp_output_test_php', $exit_array, $exit_code); ### !!!!!!!!!!!! PHPHP VERSION
-            exec('python ' . $GLOBALS['int_script'] . ' --source=tmp_output_test_php input=' . $file . '.in > tmp_output_test', $exit_array, $exit_code); #### PYTHON VERSION
+            exec('python3.6 ' . $GLOBALS['int_script'] . ' --source=tmp_output_test_php input=' . $file . '.in > tmp_output_test', $exit_array, $exit_code); #### PYTHON VERSION
             if($exit_code == $expected_rc){
                 if($exit_code == 0){ # also check the output
                     exec('diff tmp_output_test ' . $directory_path . "/" . $file . ".out > tmp_diff_output");
