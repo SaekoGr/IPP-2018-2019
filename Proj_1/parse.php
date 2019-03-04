@@ -146,6 +146,96 @@ function check_frame($arg){
     }
 }
 
+# checks for correct variable name
+function check_variable_name($name){
+    for($i = 0; $i < strlen($name); $i++){
+        if(ctype_alpha($name[$i])){
+            continue;
+        }
+        elseif(is_numeric($name[$i])){
+            if($i == 0){
+                fwrite(STDERR, "Variable name starts with number\n");
+                exit(23);
+            }
+            continue;
+        }
+        switch($name[$i]){
+            case "-":
+            case "_":
+            case "$":
+            case "&":
+            case "%":
+            case "*":
+            case "!":
+            case "?":
+                break;
+            default:
+                fwrite(STDERR, "Invalid variable name\n");
+                exit(23);
+
+        }
+    }
+}
+
+# checks for correct escape sequence
+function check_escape($string){
+    $tmp_string = "";
+    $state = 0;
+    for($i = 0; $i < strlen($string); $i++){
+
+        if($string[$i] == '\\'){
+            $state = 1;
+            if($i == (strlen($string) - 1)){    # not enough numbers
+                fwrite(STDERR, "Invalid escape sequence\n");
+                exit(23);
+            }
+            continue;
+        }
+
+        switch($state){
+            case 1:
+                $state = $state + 1;
+                if($i == (strlen($string) - 1)){    # not enough numbers
+                    fwrite(STDERR, "Invalid escape sequence\n");
+                    exit(23);
+                }
+                $tmp_string = $tmp_string . $string[$i];
+                break;
+            case 2:
+                $state = $state + 1;
+                if($i == (strlen($string) - 1)){    # not enough numbers
+                    fwrite(STDERR, "Invalid escape sequence\n");
+                    exit(23);
+                }
+                $tmp_string = $tmp_string . $string[$i];
+                break;
+            case 3:
+                $state = $state + 1;
+                $tmp_string = $tmp_string . $string[$i];
+                if(!is_numeric($tmp_string)){
+                    fwrite("Invalid escape sequence\n");
+                    exit(23);
+                }
+                break;
+            case 4:
+                if(is_numeric($string[$i])){
+                    fwrite(STDERR, "Invalid escape sequence\n");
+                    exit(23);
+                }
+                elseif($string[$i] == '\\'){
+                    $state = 1;
+                    $tmp_state = "";
+                }
+                else{
+                    $state = $state + 1;
+                }
+                break;
+            default:
+                $tmp_string = "";
+                break;
+        }
+    }
+}
 
 # evaluates arguments, opcodes, sorts it into the xml format
 function evaluate_arg($arg, $arg_type, $arg_num){
@@ -156,11 +246,12 @@ function evaluate_arg($arg, $arg_type, $arg_num){
 
     # check all possible types
     switch($arg_type){
-        case "string":
+        case "string":  # we check correct escape sequences
             $current_string = after_at($arg, $arg_type);
+            check_escape($current_string);
             write_arg($arg_type, $arg_num, $current_string);
             break;
-        case "label":   # no
+        case "label":   # no @
             if(has_at($arg)){
                 exit(23);
             }
@@ -168,7 +259,7 @@ function evaluate_arg($arg, $arg_type, $arg_num){
                 write_arg($arg_type, $arg_num, $arg);
             }
             break;
-        case "type":
+        case "type":    # type can only has following types
             if(has_at($arg)){
                 exit(23);
             }
@@ -197,7 +288,16 @@ function evaluate_arg($arg, $arg_type, $arg_num){
                 exit(23);
             }
             break;
-        case "int":
+        case "int": # checks for correctly written integer value
+            $after_at = after_at($arg, $arg_type);
+            if(is_numeric($after_at)){
+                write_arg($arg_type, $arg_num, $after_at);
+            }
+            else{
+                fwrite(STDERR, "Invalid integer value\n");
+                exit(23);
+            }
+            break;
         case "nil":
             $after_at = after_at($arg, $arg_type);
             write_arg($arg_type, $arg_num, $after_at);
@@ -205,9 +305,10 @@ function evaluate_arg($arg, $arg_type, $arg_num){
         case "var":
             check_frame($arg);
             $dummy = after_at($arg, $arg_type);
-            if(empty($dummy)){
+            if(empty($dummy)){  # check 
                 exit(23);
             }
+            check_variable_name($dummy);
             write_arg($arg_type, $arg_num, $arg);
             break;
         default:
@@ -257,6 +358,12 @@ function get_next_arg($word, $line){
     if(strpos($word, '\\') !== false){
         $word = str_replace('\\', '\\\\', $word);
     }
+    if(strpos($word, "?") !== false){
+        $word = str_replace("?", '\?', $word);
+    }
+    if(strpos($word, "$") !== false){
+        $word = str_replace("$", '\$', $word);
+    }
 
     $arg_regex = "/(?<=$word\s).*?(?=\s)/";
     preg_match($arg_regex, $line, $match);
@@ -265,6 +372,8 @@ function get_next_arg($word, $line){
     }
     else{
         $match[0] = str_replace('\\\\', '\\', $match[0]);
+        $match[0] = str_replace('\?', "?", $match[0]);
+        $match[0] = str_replace('\$', "$", $match[0]);
         return remove_whitespaces($match[0]);
     }
 }
@@ -348,6 +457,18 @@ function get_current_state($word_1, $word_2, $line){
     if(strpos($word_2, '\\') !== false){
         $word_2 = str_replace('\\', '\\\\', $word_2);
     }
+    if(strpos($word_1, "?") !== false){
+        $word_1 = str_replace("?", '\?', $word_1);
+    }
+    if(strpos($word_2, "?") !== false){
+        $word_2 = str_replace("?", '\?', $word_2);
+    }
+    if(strpos($word_1, "$") !== false){
+        $word_1 = str_replace("$", '\$', $word_1);
+    }
+    if(strpos($word_2, "$") !== false){
+        $word_2 = str_replace("$", '\$', $word_2);
+    }
 
     $basic_regex = "/$word_1\s*$word_2/";
     preg_match($basic_regex, $line, $match);
@@ -356,6 +477,8 @@ function get_current_state($word_1, $word_2, $line){
     }
     else{
         $match[0] = str_replace('\\\\', '\\', $match[0]);
+        $match[0] = str_replace('\?', "?", $match[0]);
+        $match[0] = str_replace('\$', "$", $match[0]);
         return $match[0];
     }
 }
@@ -653,7 +776,9 @@ else{   # tries to find substring in the input arguments
 $fh = fgets($f);
 $fh = remove_comment($fh);
 $fh = remove_whitespaces($fh);
-if($fh != ".IPPcode19\n" && $fh != ".IPPcode19"){
+$fh = strtolower($fh);
+
+if($fh != ".ippcode19\n" && $fh != ".ippcode19"){
     fwrite(STDERR, "Header is missing or incorrect\n");
     exit(21);
 }
@@ -664,7 +789,7 @@ $xml = prepare_document($xml);
 $instruction_counter = 1;
 
 # reading line by line and processing it
-while(($line = fgets($f)) != false){
+while(((($line = fgets($f)) != false)) and !feof($f)){
     process_line($line);
 }
 
