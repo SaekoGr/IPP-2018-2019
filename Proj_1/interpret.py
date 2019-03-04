@@ -7,21 +7,23 @@ from enum import Enum
 from unidecode import unidecode
 import codecs
 
+# arrays of all opcodes divided according to the number of operands
 non_arg = ["CREATEFRAME", "PUSHFRAME", "POPFRAME" , "RETURN", "BREAK"]
 one_arg = ["DEFVAR", "CALL", "PUSHS", "POPS", "WRITE", "LABEL", "JUMP", "EXIT", "DPRINT"]
 two_arg = ["MOVE", "INT2CHAR", "READ", "STRLEN", "TYPE", "NOT"]
 three_arg = ["ADD", "SUB", "MUL", "IDIV", "LT", "GT", "EQ", "AND", "OR", "STRI2INT", "CONCAT", "GETCHAR", "SETCHAR", "JUMPIFEQ", "JUMPIFNEQ"]
 
-#
+# parses input arguments
 class Arguments:
-    #
+    # initializes the arguments
     def __init__(self, arguments):
         # help argument
         if("--help" in arguments):
             if(len(arguments) == 1):
                 self.print_help()
+                sys.exit(0)
             else:
-                exit(10)
+                sys.exit(10)
 
         self.source = False
         self.input = False
@@ -34,18 +36,18 @@ class Arguments:
                 self.input = True
                 self.input_file = self.parse_path(arg)
             else:
-                exit(10)
+                sys.exit(10)
 
         if(self.source == False and self.input == False):
-            exit(10)
+            sys.exit(10)
 
 
-    # 
+    # gets path
     def parse_path(self, path):
         new_path = re.search(r'(?<==).*', path)
         return new_path.group(0)
 
-    #
+    # prints help
     def print_help(self):
         sys.stdout.write("Script is run as: python3.6 interpret.py\n")
         sys.stdout.write("With possible arguments:\n")
@@ -54,16 +56,16 @@ class Arguments:
         sys.stdout.write("--input=file : sets path to the file that contains input for interpretation\n")
         sys.stdout.write("At least one file must be given\n")
 
-#
+# carries out all checks for particular operand
 class Operand:
-    #
+    # initializes operand
     def __init__(self, instruction):
         
         try:
             self.type = instruction.attrib['type']
         except:
             sys.stderr.write("Missing type attribute\n")
-            exit(52)
+            sys.exit(52)
 
         
         if(self.type == "var"):
@@ -108,7 +110,7 @@ class Operand:
             elif(char.isdigit()):
                 if(i == 0):
                     sys.stderr.write("Variable name cannot start with number\n")
-                    sys.exit(52)
+                    sys.exit(32)
                 i = i + 1
                 continue
             elif(char in possible_chars):
@@ -116,7 +118,7 @@ class Operand:
                 continue
             else:
                 sys.stderr.write("Invalid variable name\n")
-                sys.exit(52)
+                sys.exit(32)
                 
 
         
@@ -139,19 +141,21 @@ class Interpret:
             try:
                 tree = ET.parse(self.arg.source_file)
             except:
-                exit(31)
+                sys.stderr.write("Invalid XML format")
+                sys.exit(31)
         else:
             try:
                 tree = ET.parse(sys.stdin)
             except:
-                exit(31)
+                sys.exit(31)
 
         try:
             root = tree.getroot()
             if(root.attrib['language'] != "IPPcode19"):
-                exit(52)
+                sys.stderr.write("Invalid language\n")
+                sys.exit(52)
         except:
-            exit(31)
+            sys.exit(31)
 
         self.global_frame = {}
         self.local_frames = []
@@ -167,7 +171,7 @@ class Interpret:
                 if(self.root[i].attrib['opcode'] == "LABEL"):
                     for child in self.root[i]:
                         if(child.text in self.labels):
-                            exit(52)
+                            sys.exit(52)
                         self.labels.update({child.text : self.root[i].attrib['order']})
         except:
             sys.exit(32)
@@ -178,19 +182,19 @@ class Interpret:
             if(str.isdigit(value)):
                 return int(value)
             else:
-                exit(32)
+                sys.exit(32)
         elif(value_type == "bool"):
             if(value == "true"):
                 return True
             elif(value == "false"):
                 return False
             else:
-                exit(32)
+                sys.exit(32)
         elif(value_type == "string"):
             if(isinstance(value_type, str)):
                 return value
             else:
-                exit(32)
+                sys.exit(32)
         elif(value_type == "label"):
             return value
         elif(value_type == "type"):
@@ -229,8 +233,7 @@ class Interpret:
             return self.format_value(argument.value, argument.type)
 
     
-
-    # also updates
+    # insert value to given frame
     def insert_to_frame(self, name, target_frame, value):
         if(target_frame == "GF"):
             if(name in self.global_frame.keys()):
@@ -254,7 +257,8 @@ class Interpret:
             except:
                 sys.exit(55)
         else:
-            exit(23)
+            sys.stderr.write("Invalid frame\n")
+            sys.exit(23)
 
     #
     def debug_print(self):
@@ -268,6 +272,7 @@ class Interpret:
             pass
         print("")
 
+    # starts with interpreting
     def start(self):
         self.counter = 1
         self.order = {}
@@ -278,7 +283,7 @@ class Interpret:
             num = int(i.attrib['order'])
             if(num in self.order.keys()):
                 sys.stderr.write("Multiple instruction order number\n")
-                sys.exit(52)
+                sys.exit(32)
             self.order.update({num : cnt})
             cnt = cnt + 1
 
@@ -288,7 +293,7 @@ class Interpret:
                 current_instruction = self.order[self.counter]
             except:
                 sys.stderr.write("Invalid instruction order number\n")
-                sys.exit(52)
+                sys.exit(32)
             self.execute_instruction(current_instruction)
 
         # close the files
@@ -299,45 +304,72 @@ class Interpret:
             self.arg.s_f.close()
 
 
-    #
+    # executes each instruction
     def execute_instruction(self, op_num):
         try:
             current_opcode = self.root[op_num].attrib['opcode']
         except:
-            sys.exit(52)
+            sys.exit(32)
 
         # prepare args #
         if(current_opcode in non_arg):
             pass
+        # one argument
         elif(current_opcode in one_arg):
             try:
+                # get arguments
                 first_arg = self.root[op_num].findall("arg1")[0]
             except:
                 sys.stderr.write("Invalid arguments in xml file\n")
-                sys.exit(52)
+                sys.exit(32)
+            # too many arguments
+            if(len(self.root[op_num].findall("arg1")) != 1):
+                sys.stderr.write("Invalid arguments in xml file\n")
+                sys.exit(32)
             arg1 = Operand(first_arg)
+        # two arguments
         elif(current_opcode in two_arg):
             try:
+                # get arguments
                 first_arg = self.root[op_num].findall("arg1")[0]
                 second_arg = self.root[op_num].findall("arg2")[0]
             except:
                 sys.stderr.write("Invalid arguments in xml file\n")
-                sys.exit(52)
+                sys.exit(32)
+            # too many arguments
+                if(len(self.root[op_num].findall("arg1")) != 1):
+                    sys.stderr.write("Invalid arguments in xml file\n")
+                    sys.exit(32)
+                if(len(self.root[op_num].findall("arg2")) != 1):
+                    sys.stderr.write("Invalid arguments in xml file\n")
+                    sys.exit(32)
             arg1 = Operand(first_arg)
             arg2 = Operand(second_arg)
+        # three arguments
         elif(current_opcode in three_arg):
             try:
+                # get arguments
                 first_arg = self.root[op_num].findall("arg1")[0]
                 second_arg = self.root[op_num].findall("arg2")[0]
                 third_arg = self.root[op_num].findall("arg3")[0]
             except:
                 sys.stderr.write("Invalid arguments in xml file\n")
-                sys.exit(52)
+                sys.exit(32)
+            # too many arguments
+            if(len(self.root[op_num].findall("arg1")) != 1):
+                sys.stderr.write("Invalid arguments in xml file\n")
+                sys.exit(32)
+            if(len(self.root[op_num].findall("arg2")) != 1):
+                sys.stderr.write("Invalid arguments in xml file\n")
+                sys.exit(32)
+            if(len(self.root[op_num].findall("arg3")) != 1):
+                sys.stderr.write("Invalid arguments in xml file\n")
+                sys.exit(32)
             arg1 = Operand(first_arg)
             arg2 = Operand(second_arg)
             arg3 = Operand(third_arg)
         else:
-            exit(52)
+            sys.exit(32)
 
         # CREATEFRAME
         if(current_opcode == "CREATEFRAME"):
@@ -386,7 +418,7 @@ class Interpret:
             value_1 = self.get_argument_value(arg2)
             value_2 = self.get_argument_value(arg3)
             if(isinstance(value_1, bool) or isinstance(value_2, bool)):
-                exit(53)
+                sys.exit(53)
 
             if(isinstance(value_1, int) and isinstance(value_2, int)):
                 result = int(value_1 + value_2)
@@ -399,7 +431,7 @@ class Interpret:
             value_1 = self.get_argument_value(arg2)
             value_2 = self.get_argument_value(arg3)
             if(isinstance(value_1, bool) or isinstance(value_2, bool)):
-                exit(53)
+                sys.exit(53)
 
             if(isinstance(value_1, int) and isinstance(value_2, int)):
                 result = int(value_1 - value_2)
@@ -441,12 +473,12 @@ class Interpret:
             value_2 = self.get_argument_value(arg3)
 
             if(type(value_1) != type(value_2)):
-                exit(53)
+                sys.exit(53)
 
             if(isinstance(value_1, int) or isinstance(value_1, bool) or isinstance(value_1, str)):
                 result = value_1<value_2
             else:
-                exit(53)
+                sys.exit(53)
             self.insert_to_frame(arg1.name, arg1.frame, result)
             self.counter = self.counter + 1
         # GT <var> <symb> <symb>
@@ -455,12 +487,12 @@ class Interpret:
             value_2 = self.get_argument_value(arg3)
 
             if(type(value_1) != type(value_2)):
-                exit(53)
+                sys.exit(53)
 
             if(isinstance(value_1, int) or isinstance(value_1, bool) or isinstance(value_1, str)):
                 result = value_1>value_2
             else:
-                exit(53)
+                sys.exit(53)
             self.insert_to_frame(arg1.name, arg1.frame, result)
             self.counter = self.counter + 1
         # EQ <var> <symb> <symb>
@@ -469,12 +501,12 @@ class Interpret:
             value_2 = self.get_argument_value(arg3)
 
             if(type(value_1) != type(value_2)):
-                exit(53)
+                sys.exit(53)
 
             if(isinstance(value_1, int) or isinstance(value_1, bool) or isinstance(value_1, str) or isinstance(value_1, None)):
                 result = value_1 == value_2
             else:
-                exit(53)
+                sys.exit(53)
             self.insert_to_frame(arg1.name, arg1.frame, result)
             self.counter = self.counter + 1
         # INT2CHAR <var> <symb>
@@ -751,7 +783,7 @@ class Interpret:
 
         self.debug_print()
 
-
+    # replaces decimal escape sequences
     def replace_decimal_escapes(self, s):
         return re.sub(
         r"\\(\d\d\d)",
@@ -760,12 +792,13 @@ class Interpret:
     )
             
         
-#
+# starts interpret, prepares labels
 def main():
     if(len(sys.argv) == 1 or len(sys.argv) > 4):
         sys.stderr.write("Invalid arguments\n")
         sys.exit(10)
 
+    
     my_interpret = Interpret()
     my_interpret.prepare_labels()
     my_interpret.start()

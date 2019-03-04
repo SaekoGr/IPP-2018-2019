@@ -184,25 +184,25 @@ foreach($argv as $key){
     }
     else{
         fwrite(STDERR, "Invalid argument\n");
-        return 10;
+        exit(10);
     }
 }
 
 # checks for forbidden combination
 if($arguments["--parse-only"] == true and $arguments["--int-only"] == true){
     fwrite(STDERR, "Combination of --parse-only and --int-only is not allowed\n");
-    return 10;
+    exit(10);
 }
 
 # check for help and correct number of arguments
 if($arguments["--help"] == true){
     if($argc != 2){
         fwrite(STDERR, "--help cannot be combined with other arguments\n");
-        return 10;
+        exit(10);
     }
     else{
         print_help();
-        return 0;
+        exit(0);
     }
 }
 
@@ -223,17 +223,17 @@ if(empty($int_script)){
 # check their existence
 if(!file_exists($directory_path)){
     fwrite(STDERR, "$directory_path doesn't exist\n");
-    return 11;
+    exit(11);
 }
 
 if(!file_exists($parse_script)){
     fwrite(STDERR, "$parse_script doesn't exist\n");
-    return 11;
+    exit(11);
 }
 
 if(!file_exists($int_script)){
     fwrite(STDERR, "$int_script doesn't exist\n");
-    return 11;
+    exit(11);
 }
 
 # prepares the top part of html and css
