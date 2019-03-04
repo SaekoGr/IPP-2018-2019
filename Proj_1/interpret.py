@@ -56,37 +56,68 @@ class Arguments:
 
 #
 class Operand:
+    #
     def __init__(self, instruction):
+        
         try:
             self.type = instruction.attrib['type']
         except:
-            exit(32)
+            sys.stderr.write("Missing type attribute\n")
+            exit(52)
 
+        
         if(self.type == "var"):
             try:
                 if("@" in instruction.text):
                     self.frame = self.get_frame(instruction.text)
                     self.name = self.get_name(instruction.text)
+                    self.check_variable_name(self.name)
                     self.value = None
                 else:
-                    sys.exit(32)
+                    sys.stderr.write("Missing @ in variable name\n")
+                    sys.exit(52)
             except:
-                sys.exit(32)
+                sys.stderr.write("Invalid variable\n")
+                sys.exit(52)
         else:
             try:
                 self.value = instruction.text
                 self.frame = None
                 self.name = None
             except:
-                sys.exit(32)
+                sys.exit(52)
 
+    #
     def get_frame(self, name):  # TODO - try excep - both
         nam = re.search(r'.*(?=@)', name)
         return nam.group(0)
 
+    #
     def get_name(self, name):
         frame = re.search(r'(?<=@).*', name)
         return frame.group(0)
+    
+    #
+    def check_variable_name(self, name):
+        i = 0
+        possible_chars = ["_", "-", "$", "&", "%", "*", "!", "?"]
+        for char in name:
+            if(char.isalpha()):
+                i = i + 1
+                continue
+            elif(char.isdigit()):
+                if(i == 0):
+                    sys.stderr.write("Variable name cannot start with number\n")
+                    sys.exit(52)
+                i = i + 1
+                continue
+            elif(char in possible_chars):
+                i = i + 1
+                continue
+            else:
+                sys.stderr.write("Invalid variable name\n")
+                sys.exit(52)
+                
 
         
 
@@ -118,7 +149,7 @@ class Interpret:
         try:
             root = tree.getroot()
             if(root.attrib['language'] != "IPPcode19"):
-                exit(32)
+                exit(52)
         except:
             exit(31)
 
@@ -167,7 +198,8 @@ class Interpret:
         elif(value_type == "nil"):
             return value
         else:
-            pass    # baaaaaaaad
+            sys.stderr.write("Invalid value type\n")
+            sys.exit(52)
 
     #
     def get_argument_value(self, argument):
@@ -237,9 +269,27 @@ class Interpret:
         print("")
 
     def start(self):
-        self.counter = 0
-        while self.counter < len(self.root):
-            self.execute_instruction(self.counter)
+        self.counter = 1
+        self.order = {}
+
+        # prepare xml correct order
+        cnt = 0
+        for i in self.root:
+            num = int(i.attrib['order'])
+            if(num in self.order.keys()):
+                sys.stderr.write("Multiple instruction order number\n")
+                sys.exit(52)
+            self.order.update({num : cnt})
+            cnt = cnt + 1
+
+        # execute instruction
+        while self.counter < (len(self.root) + 1):
+            try:
+                current_instruction = self.order[self.counter]
+            except:
+                sys.stderr.write("Invalid instruction order number\n")
+                sys.exit(52)
+            self.execute_instruction(current_instruction)
 
         # close the files
         if(self.arg.input):
@@ -254,22 +304,40 @@ class Interpret:
         try:
             current_opcode = self.root[op_num].attrib['opcode']
         except:
-            sys.exit(32)
+            sys.exit(52)
 
         # prepare args #
         if(current_opcode in non_arg):
             pass
         elif(current_opcode in one_arg):
-            arg1 = Operand(self.root[op_num][0])
+            try:
+                first_arg = self.root[op_num].findall("arg1")[0]
+            except:
+                sys.stderr.write("Invalid arguments in xml file\n")
+                sys.exit(52)
+            arg1 = Operand(first_arg)
         elif(current_opcode in two_arg):
-            arg1 = Operand(self.root[op_num][0])
-            arg2 = Operand(self.root[op_num][1])
+            try:
+                first_arg = self.root[op_num].findall("arg1")[0]
+                second_arg = self.root[op_num].findall("arg2")[0]
+            except:
+                sys.stderr.write("Invalid arguments in xml file\n")
+                sys.exit(52)
+            arg1 = Operand(first_arg)
+            arg2 = Operand(second_arg)
         elif(current_opcode in three_arg):
-            arg1 = Operand(self.root[op_num][0])
-            arg2 = Operand(self.root[op_num][1])
-            arg3 = Operand(self.root[op_num][2])
+            try:
+                first_arg = self.root[op_num].findall("arg1")[0]
+                second_arg = self.root[op_num].findall("arg2")[0]
+                third_arg = self.root[op_num].findall("arg3")[0]
+            except:
+                sys.stderr.write("Invalid arguments in xml file\n")
+                sys.exit(52)
+            arg1 = Operand(first_arg)
+            arg2 = Operand(second_arg)
+            arg3 = Operand(third_arg)
         else:
-            exit(32)
+            exit(52)
 
         # CREATEFRAME
         if(current_opcode == "CREATEFRAME"):
@@ -681,7 +749,8 @@ class Interpret:
             self.insert_to_frame(arg1.name, arg1.frame, line)
             self.counter = self.counter + 1
 
-        #self.debug_print()
+        self.debug_print()
+
 
     def replace_decimal_escapes(self, s):
         return re.sub(
@@ -690,8 +759,6 @@ class Interpret:
         s
     )
             
-
-
         
 #
 def main():
