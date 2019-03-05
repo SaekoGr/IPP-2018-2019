@@ -9,7 +9,8 @@ import codecs
 
 # arrays of all opcodes divided according to the number of operands
 non_arg = ["CREATEFRAME", "PUSHFRAME", "POPFRAME" , "RETURN", "BREAK"]
-one_arg = ["DEFVAR", "CALL", "PUSHS", "POPS", "WRITE", "LABEL", "JUMP", "EXIT", "DPRINT"]
+non_arg = non_arg + ["CLEARS", "ADDS", "SUBS", "MULS", "IDIVS", "LTS", "GTS", "EQS", "ANDS", "ORS", "NOTS", "INT2CHARS", "STRI2INTS"]
+one_arg = ["DEFVAR", "CALL", "PUSHS", "POPS", "WRITE", "LABEL", "JUMP", "EXIT", "DPRINT", "JUMPIFEQS", "JUMPIFNEQS"]
 two_arg = ["MOVE", "INT2CHAR", "READ", "STRLEN", "TYPE", "NOT"]
 three_arg = ["ADD", "SUB", "MUL", "IDIV", "LT", "GT", "EQ", "AND", "OR", "STRI2INT", "CONCAT", "GETCHAR", "SETCHAR", "JUMPIFEQ", "JUMPIFNEQ"]
 
@@ -627,7 +628,7 @@ class Interpret:
             label = self.get_argument_value(arg1)
             try:
                 jump_destination = self.labels[label]
-                self.counter = int(jump_destination) - 1
+                self.counter = int(jump_destination)
             except:
                 sys.exit(52)
 
@@ -645,7 +646,7 @@ class Interpret:
 
             if(value_1 == value_2):
                 jump_destination = self.labels[label]
-                self.counter = int(jump_destination) - 1
+                self.counter = int(jump_destination)
             else:
                 self.counter = self.counter + 1
         # JUMPIFNEQ <label> <symb> <symb>
@@ -659,7 +660,7 @@ class Interpret:
 
             if(value_1 != value_2):
                 jump_destination = self.labels[label]
-                self.counter = int(jump_destination) - 1
+                self.counter = int(jump_destination)
             else:
                 self.counter = self.counter + 1
         # WRITE <symb>
@@ -680,7 +681,7 @@ class Interpret:
             label = self.get_argument_value(arg1)
             try:
                 jump_destination = self.labels[label]
-                self.counter = int(jump_destination) - 1
+                self.counter = int(jump_destination)
                 self.call_stack.append(op_num + 1)
             except:
                 sys.exit(52)
@@ -777,11 +778,209 @@ class Interpret:
                         line = ""
                 else:
                     sys.exit(53)
-
             self.insert_to_frame(arg1.name, arg1.frame, line)
             self.counter = self.counter + 1
+        #
+        #       STACK FUNCTIONS
+        # 
+        # CLEARS
+        elif(current_opcode == "CLEARS"):
+            self.data_stack = []
+            self.counter = self.counter + 1
+        # ADDS
+        elif(current_opcode == "ADDS"):
+            self.chceck_available_data_stack(2)
+            first_op = self.data_stack[len(self.data_stack) - 1]
+            second_op = self.data_stack[len(self.data_stack) - 2]
 
-        self.debug_print()
+            if((not isinstance(first_op, int)) or (not isinstance(second_op, int))):
+                sys.stderr.write("Invalid types\n")
+                sys.exit(53)
+
+            addition = first_op + second_op
+            self.remove_from_stack(2)
+            self.data_stack.append(addition)
+            self.counter = self.counter + 1
+        # SUBS
+        elif(current_opcode == "SUBS"):
+            self.chceck_available_data_stack(2)
+            first_op = self.data_stack[len(self.data_stack) - 1]
+            second_op = self.data_stack[len(self.data_stack) - 2]
+            if((not isinstance(first_op, int)) or (not isinstance(second_op, int))):
+                sys.stderr.write("Invalid types\n")
+                sys.exit(53)
+
+            subtraction = first_op - second_op
+            self.remove_from_stack(2)
+            self.data_stack.append(subtraction)
+            self.counter = self.counter + 1
+        # MULS
+        elif(current_opcode == "MULS"):
+            self.chceck_available_data_stack(2)
+            first_op = self.data_stack[len(self.data_stack) - 1]
+            second_op = self.data_stack[len(self.data_stack) - 2]
+            if((not isinstance(first_op, int)) or (not isinstance(second_op, int))):
+                sys.stderr.write("Invalid types\n")
+                sys.exit(53)
+            multiplication = first_op * second_op
+            self.remove_from_stack(2)
+            self.data_stack.append(multiplication)
+            self.counter = self.counter + 1
+        # IDIVS
+        elif(current_opcode == "IDIVS"):
+            self.chceck_available_data_stack(2)
+            first_op = self.data_stack[len(self.data_stack) - 1]
+            second_op = self.data_stack[len(self.data_stack) - 2]
+            if((not isinstance(first_op, int)) or (not isinstance(second_op, int))):
+                sys.stderr.write("Invalid types\n")
+                sys.exit(53)
+            
+            if(second_op == 0):
+                sys.stderr.write("Zero division\n")
+                sys.exit(57)
+            division = int(first_op / second_op)
+            self.remove_from_stack(2)
+            self.data_stack.append(division)
+            self.counter = self.counter + 1
+        # LTS
+        elif(current_opcode == "LTS"):
+            self.chceck_available_data_stack(2)
+            first_op = self.data_stack[len(self.data_stack) - 1]
+            second_op = self.data_stack[len(self.data_stack) - 2]
+            self.remove_from_stack(2)
+            if(type(first_op) != type(second_op)):
+                sys.exit(53)
+            if(isinstance(first_op, int) or isinstance(first_op, bool) or isinstance(first_op, str)):
+                self.data_stack.append(first_op < second_op)
+            else:
+                sys.exit(53)
+            self.counter = self.counter + 1
+        # GTS
+        elif(current_opcode == "GTS"):
+            self.chceck_available_data_stack(2)
+            first_op = self.data_stack[len(self.data_stack) - 1]
+            second_op = self.data_stack[len(self.data_stack) - 2]
+            self.remove_from_stack(2)
+            if(type(first_op) != type(second_op)):
+                sys.exit(53)
+            if(isinstance(first_op, int) or isinstance(first_op, bool) or isinstance(first_op, str)):
+                self.data_stack.append(first_op > second_op)
+            else:
+                sys.exit(53)
+            self.counter = self.counter + 1
+        # EQS
+        elif(current_opcode == "EQS"):
+            self.chceck_available_data_stack(2)
+            first_op = self.data_stack[len(self.data_stack) - 1]
+            second_op = self.data_stack[len(self.data_stack) - 2]
+            self.remove_from_stack(2)
+            if(type(first_op) != type(second_op)):
+                sys.exit(53)
+            if(isinstance(first_op, int) or isinstance(first_op, bool) or isinstance(first_op, str) or isinstance(first_op, None)):
+                self.data_stack.append(first_op == second_op)
+            else:
+                sys.exit(53)
+            self.counter = self.counter + 1
+        # ANDS
+        elif(current_opcode == "ANDS"):
+            self.chceck_available_data_stack(2)
+            first_op = self.data_stack[len(self.data_stack) - 1]
+            second_op = self.data_stack[len(self.data_stack) - 2]
+            self.remove_from_stack(2)
+            if(type(first_op) == bool and type(second_op) == bool):
+                self.data_stack.append(first_op and second_op)
+            else:
+                sys.exit(53)
+            self.counter = self.counter + 1
+        # ORS
+        elif(current_opcode == "ORS"):
+            self.chceck_available_data_stack(2)
+            first_op = self.data_stack[len(self.data_stack) - 1]
+            second_op = self.data_stack[len(self.data_stack) - 2]
+            self.remove_from_stack(2)
+            if(type(first_op) == bool and type(second_op) == bool):
+                self.data_stack.append(first_op or second_op)
+            else:
+                sys.exit(53)
+            self.counter = self.counter + 1
+        # NOTS
+        elif(current_opcode == "NOTS"):
+            self.chceck_available_data_stack(1)
+            first_op = self.data_stack[len(self.data_stack) - 1]
+            self.remove_from_stack(1)
+            if(type(first_op) == bool):
+                self.data_stack.append(not first_op)
+            else:
+                sys.exit(53)
+            self.counter = self.counter + 1
+        # INT2CHARS
+        elif(current_opcode == "INT2CHARS"):
+            self.chceck_available_data_stack(1)
+            first_op = self.data_stack[len(self.data_stack) - 1]
+            self.remove_from_stack(1)
+            try:
+                self.data_stack.append(chr(first_op))
+            except:
+                sys.exit(58)
+            self.counter = self.counter + 1
+        # STRI2INTS
+        elif(current_opcode == "STRI2INTS"):
+            self.chceck_available_data_stack(2)
+            first_op = self.data_stack[len(self.data_stack) - 1]
+            second_op = self.data_stack[len(self.data_stack) - 2]
+            self.remove_from_stack(2)
+            if(isinstance(second_op, str) and isinstance(first_op, int)):
+                try:
+                    self.data_stack.append(ord(second_op[first_op]))
+                except:
+                    sys.stderr.write("Index out of bounds\n")
+                    sys.exit(58)
+            else:
+                sys.stderr.write("Type mismatch\n")
+                sys.exit(53)
+
+            self.counter = self.counter + 1
+        # JUMPIFEQS
+        elif(current_opcode == "JUMPIFEQS"):
+            label = self.get_argument_value(arg1)
+            self.chceck_available_data_stack(2)
+            first_op = self.data_stack[len(self.data_stack) - 1]
+            second_op = self.data_stack[len(self.data_stack) - 2]
+            self.remove_from_stack(2)
+            if(type(first_op) != type(second_op)):
+                sys.exit(53)
+            if(first_op == second_op):
+                jump_destination = self.labels[label]
+                self.counter = int(jump_destination)
+            else:
+                self.counter = self.counter + 1
+        # JUMPIFNEQS
+        elif(current_opcode == "JUMPIFNEQS"):
+            label = self.get_argument_value(arg1)
+            self.chceck_available_data_stack(2)
+            first_op = self.data_stack[len(self.data_stack) - 1]
+            second_op = self.data_stack[len(self.data_stack) - 2]
+            self.remove_from_stack(2)
+            if(type(first_op) != type(second_op)):
+                sys.exit(53)
+            if(first_op != second_op):
+                jump_destination = self.labels[label]
+                self.counter = int(jump_destination)
+            else:
+                self.counter = self.counter + 1
+
+        
+
+        #self.debug_print()
+
+    def chceck_available_data_stack(self, number):
+        if(len(self.data_stack) < number):
+            sys.stderr.write("Not enough data on data stack\n")
+            sys.exit(56)
+
+    def remove_from_stack(self, number):
+        for dummy in range(0, number):
+            del self.data_stack[len(self.data_stack) - 1]
 
     # replaces decimal escape sequences
     def replace_decimal_escapes(self, s):
