@@ -24,23 +24,42 @@ class Arguments:
                 self.print_help()
                 sys.exit(0)
             else:
+                sys.stderr.write("--help cannot be combined with other arguments\n")
                 sys.exit(10)
 
         self.source = False
         self.input = False
+        self.stats = False
+        self.stats_arg = []
 
         for arg in arguments:
             if("--source=" in arg):
                 self.source = True
                 self.source_file = self.parse_path(arg)
-            elif("--input" in arg):
+            elif("--input=" in arg):
                 self.input = True
                 self.input_file = self.parse_path(arg)
+            elif("--stats=" in arg):
+                self.stats = True
+                self.stats_file = self.parse_path(arg)
+            elif("--insts" == arg or "--vars" == arg):
+                self.stats_arg.append(arg)
             else:
+                sys.stderr.write("Invalid arguments\n")
                 sys.exit(10)
 
         if(self.source == False and self.input == False):
+            sys.stderr.write("At least one file is needed\n")
             sys.exit(10)
+
+        if(self.stats == False and len(self.stats_arg) != 0):
+            sys.stderr.write("File for stats is required\n")
+            sys.exit(10)
+
+        if(self.stats == True and len(self.stats_arg) == 0):
+            sys.stderr.write("Statistics need at least one paremeter from these: --insts --vars\n")
+            sys.exit(10)
+
 
 
     # gets path
@@ -122,8 +141,6 @@ class Operand:
                 sys.exit(32)
                 
 
-        
-
 #
 class Interpret:
     #
@@ -142,12 +159,13 @@ class Interpret:
             try:
                 tree = ET.parse(self.arg.source_file)
             except:
-                sys.stderr.write("Invalid XML format")
+                sys.stderr.write("Invalid XML format\n")
                 sys.exit(31)
         else:
             try:
                 tree = ET.parse(sys.stdin)
             except:
+                sys.stderr.write("Invalid XML format\n")
                 sys.exit(31)
 
         try:
@@ -164,6 +182,10 @@ class Interpret:
         self.labels = {}
         self.root = root
         self.call_stack = []
+        # statistics variables
+        self.insts = 0
+        self.vars = 0
+        
 
     #
     def prepare_labels(self):
@@ -277,6 +299,7 @@ class Interpret:
     def start(self):
         self.counter = 1
         self.order = {}
+        
 
         # prepare xml correct order
         cnt = 0
@@ -303,6 +326,24 @@ class Interpret:
 
         if(self.arg.source):
             self.arg.s_f.close()
+
+        if(self.arg.stats):
+            stat_file = open(self.arg.stats_file, "w")
+            if(len(self.arg.stats_arg) == 1):
+                if("--insts" == self.arg.stats_arg[0]):
+                    stat_file.write(str(self.insts) + '\n')
+                else:
+                    stat_file.write(str(self.vars) + '\n')
+            else:
+                if("--insts" == self.arg.stats_arg[0]):
+                    stat_file.write(str(self.insts) + '\n')
+                    stat_file.write(str(self.vars) + '\n')
+                else:
+                    stat_file.write(str(self.vars) + '\n')
+                    stat_file.write(str(self.insts) + '\n')
+
+            stat_file.close()
+
 
 
     # executes each instruction
@@ -970,14 +1011,46 @@ class Interpret:
                 self.counter = self.counter + 1
 
         
+        if(self.arg.stats and "--insts" in self.arg.stats_arg):
+            self.insts = self.insts + 1
 
+        if(self.arg.stats and "--vars" in self.arg.stats_arg):
+            self.calculate_defined_variables()
         #self.debug_print()
 
+    #
+    def calculate_defined_variables(self):
+        total_sum = 0
+
+        # look in global frames
+        for key in self.global_frame:
+            if(self.global_frame[key] != None):
+                total_sum = total_sum + 1
+
+        # look in global frames
+        for i in range(0, len(self.local_frames)):
+            for key in self.local_frames[i]:
+                if(self.local_frames[i][key] != None):
+                    total_sum = total_sum + 1
+
+        # look in temporary frames
+        try:
+            for key in self.temporary_frame:
+                if(self.temporary_frame[key] != None):
+                    total_sum = total_sum + 1
+        except:
+            pass
+
+        if(total_sum > self.vars):
+            self.vars = total_sum
+
+    #
     def chceck_available_data_stack(self, number):
         if(len(self.data_stack) < number):
             sys.stderr.write("Not enough data on data stack\n")
             sys.exit(56)
 
+    #
     def remove_from_stack(self, number):
         for dummy in range(0, number):
             del self.data_stack[len(self.data_stack) - 1]
@@ -990,14 +1063,8 @@ class Interpret:
         s
     )
             
-        
 # starts interpret, prepares labels
-def main():
-    if(len(sys.argv) == 1 or len(sys.argv) > 4):
-        sys.stderr.write("Invalid arguments\n")
-        sys.exit(10)
-
-    
+def main():    
     my_interpret = Interpret()
     my_interpret.prepare_labels()
     my_interpret.start()
