@@ -1,8 +1,5 @@
 #!/usr/bin/env php
 <?php
-### TODO - COMMENTS
-### SYMB
-### EVALUATE RETURN CODE
 
 # array for all the types
 define('types', array(
@@ -132,16 +129,19 @@ function check_frame($arg){
         preg_match($before_at, $arg, $match);
 
         if(!$match){
+            fwrite(STDERR, "Invalid variable operand\n");
             exit(23);
         }
         if($match[0] == "GF" || $match[0] == "TF" || $match[0] == "LF"){
             ;
         }
         else{
+            fwrite(STDERR, "Invalid variable operand\n");
             exit(23);
         }
     }
     else{
+        fwrite(STDERR, "Invalid variable operand\n");
         exit(23);
     }
 }
@@ -305,7 +305,8 @@ function evaluate_arg($arg, $arg_type, $arg_num){
         case "var":
             check_frame($arg);
             $dummy = after_at($arg, $arg_type);
-            if(empty($dummy)){  # check 
+            if(empty($dummy)){  # check
+                fwrite(STDERR, "Undefined variable name\n"); 
                 exit(23);
             }
             check_variable_name($dummy);
@@ -348,6 +349,7 @@ function zero_args($opcode, $line){
         xmlwriter_end_element($GLOBALS['xml']);
     }
     else{
+        fwrite(STDERR, "Too many operands for current opcode\n");
         exit(23);
     }
 }
@@ -364,6 +366,15 @@ function get_next_arg($word, $line){
     if(strpos($word, "$") !== false){
         $word = str_replace("$", '\$', $word);
     }
+    if(strpos($word, "<") !== false){
+        $word = str_replace("<", '\<', $word);
+    }
+    if(strpos($word, ">") !== false){
+        $word = str_replace(">", '\>', $word);
+    }
+    if(strpos($word, "/") !== false){
+        $word = str_replace("/", '\/', $word);
+    }
 
     $arg_regex = "/(?<=$word\s).*?(?=\s)/";
     preg_match($arg_regex, $line, $match);
@@ -374,6 +385,9 @@ function get_next_arg($word, $line){
         $match[0] = str_replace('\\\\', '\\', $match[0]);
         $match[0] = str_replace('\?', "?", $match[0]);
         $match[0] = str_replace('\$', "$", $match[0]);
+        $match[0] = str_replace('\<', "<", $match[0]);
+        $match[0] = str_replace('\>', ">", $match[0]);
+        $match[0] = str_replace('\/', "/", $match[0]);
         return remove_whitespaces($match[0]);
     }
 }
@@ -385,6 +399,7 @@ function one_arg($opcode, $line, $arg1_type){
 
     # check whether it exists
     if($arg1 == ""){
+        fwrite(STDERR, "Too few operands for current opcode\n");
         exit(23);
     }
 
@@ -407,6 +422,7 @@ function one_arg($opcode, $line, $arg1_type){
         xmlwriter_end_element($GLOBALS['xml']);
     }
     else{
+        fwrite(STDERR, "Too many operands for current opcode\n");
         exit(23);
     }
 }
@@ -422,12 +438,14 @@ function two_args($opcode, $line, $arg1_type, $arg2_type){
 
     # check whether both exist
     if($arg1 == "" or $arg2 == ""){
+        fwrite(STDERR, "Too few operands for current opcode\n");
         exit(23);
     }
 
     # special check for read function
     if(!strcasecmp($opcode, "READ")){           # 2
         if($arg2 != "string" && $arg2 != "int" && $arg2 != "bool"){
+            fwrite(STDERR, "Invalid read type\n");
             exit(23);
         }
     }
@@ -441,6 +459,7 @@ function two_args($opcode, $line, $arg1_type, $arg2_type){
         xmlwriter_end_element($GLOBALS['xml']);
     }
     else{
+        fwrite(STDERR, "Too many operands for current opcode\n");
         exit(23);
     }
 }
@@ -469,6 +488,24 @@ function get_current_state($word_1, $word_2, $line){
     if(strpos($word_2, "$") !== false){
         $word_2 = str_replace("$", '\$', $word_2);
     }
+    if(strpos($word_1, "<") !== false){
+        $word_1 = str_replace("<", '\<', $word_1);
+    }
+    if(strpos($word_2, "<") !== false){
+        $word_2 = str_replace("<", '\<', $word_2);
+    }
+    if(strpos($word_1, ">") !== false){
+        $word_1 = str_replace(">", '\>', $word_1);
+    }
+    if(strpos($word_2, ">") !== false){
+        $word_2 = str_replace(">", '\>', $word_2);
+    }
+    if(strpos($word_1, "/") !== false){
+        $word_1 = str_replace("/", '\/', $word_1);
+    }
+    if(strpos($word_2, "/") !== false){
+        $word_2 = str_replace("/", '\/', $word_2);
+    }
 
     $basic_regex = "/$word_1\s*$word_2/";
     preg_match($basic_regex, $line, $match);
@@ -479,6 +516,9 @@ function get_current_state($word_1, $word_2, $line){
         $match[0] = str_replace('\\\\', '\\', $match[0]);
         $match[0] = str_replace('\?', "?", $match[0]);
         $match[0] = str_replace('\$', "$", $match[0]);
+        $match[0] = str_replace('\<', "<", $match[0]);
+        $match[0] = str_replace('\>', ">", $match[0]);
+        $match[0] = str_replace('\/', "/", $match[0]);
         return $match[0];
     }
 }
@@ -494,8 +534,10 @@ function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
     $arg3 = remove_comment(get_next_arg($tmp_state, $line));
     $tmp_state = get_current_state($tmp_state, $arg3, $line);
 
+
     # check whether they exist
     if($arg1 == "" or $arg2 == "" or $arg3 == ""){
+        fwrite(STDERR, "Too few operands for current opcode\n");
         exit(23);
     }
 
@@ -516,7 +558,8 @@ function three_args($opcode, $line, $arg1_type, $arg2_type, $arg3_type){
             evaluate_arg($arg3, $arg3_type, "arg3");
             xmlwriter_end_element($GLOBALS['xml']);
     }
-    else{   # too many arguments, error
+    else{   # too many operands, error
+        fwrite(STDERR, "Too many operands for current opcode\n");
         exit(23);
     }
 }
@@ -537,6 +580,51 @@ function compare_opcode($opcode, $line){
     }
     elseif(!strcasecmp($opcode, "BREAK")){          # 0
         zero_args($opcode, $line);
+    }
+    elseif(!strcasecmp($opcode, "CLEARS")){         # 0
+        zero_args($opcode, $line);
+    }
+    elseif(!strcasecmp($opcode, "ADDS")){           # 0
+        zero_args($opcode, $line);
+    }
+    elseif(!strcasecmp($opcode, "SUBS")){           # 0
+        zero_args($opcode, $line);
+    }
+    elseif(!strcasecmp($opcode, "MULS")){           # 0
+        zero_args($opcode, $line);
+    }
+    elseif(!strcasecmp($opcode, "IDIVS")){          # 0
+        zero_args($opcode, $line);
+    }
+    elseif(!strcasecmp($opcode, "LTS")){            # 0
+        zero_args($opcode, $line);
+    }
+    elseif(!strcasecmp($opcode, "GTS")){            # 0
+        zero_args($opcode, $line);
+    }
+    elseif(!strcasecmp($opcode, "EQS")){            # 0
+        zero_args($opcode, $line);
+    }
+    elseif(!strcasecmp($opcode, "ANDS")){           # 0
+        zero_args($opcode, $line);
+    }
+    elseif(!strcasecmp($opcode, "ORS")){            # 0
+        zero_args($opcode, $line);
+    }
+    elseif(!strcasecmp($opcode, "NOTS")){           # 0
+        zero_args($opcode, $line);
+    }
+    elseif(!strcasecmp($opcode, "INT2CHARS")){      # 0
+        zero_args($opcode, $line);
+    }
+    elseif(!strcasecmp($opcode, "STRI2INTS")){      # 0
+        zero_args($opcode, $line);
+    }
+    elseif(!strcasecmp($opcode, "JUMPIFEQS")){      # 1
+        one_arg($opcode, $line, "label");
+    }
+    elseif(!strcasecmp($opcode, "JUMPIFNEQS")){     # 1
+        one_arg($opcode, $line, "label");
     }
     elseif(!strcasecmp($opcode, "DEFVAR")){         # 1
         one_arg($opcode, $line, "var");
@@ -629,6 +717,7 @@ function compare_opcode($opcode, $line){
         three_args($opcode, $line, "label", "symb", "symb");
     }
     else{
+        fwrite(STDERR, "Unknown opcode\n");
         exit(22);
     }
 }
@@ -641,9 +730,6 @@ function is_one_line_comment($line){
         return false;
     }
     elseif("$match[0]" == "$line" or "$match[0]\n" == "$line"){
-        if($GLOBALS['stats'] and $GLOBALS['comments']){
-            $GLOBALS['comment_counter']++;
-        }
         return true;
     }
     else{
@@ -673,13 +759,13 @@ function check_whitespaces($line){
 function process_line($line){
     # check for one line comment
     if(is_one_line_comment($line)){
-        return 0;
+        return;
     }
     if($line == "\n" or $line == "\s" or $line == "\t"){
-        return 0;
+        return;
     }
     if(check_whitespaces($line)){
-        return 0;
+        return;
     }
 
     # uses regex to extract the opcode
@@ -691,7 +777,9 @@ function process_line($line){
 
 # functions for help
 function print_help(){
-    fwrite(STDOUT, "Usage: php7.3 parse.php < file\n");
+    fwrite(STDOUT, "Usage: php7.3 parse.php\n");
+    fwrite(STDOUT, "Input can be given as file to stdin or written directly to stdin\n");
+    fwrite(STDOUT, "Arguments for statistics: --stats=file [--comments --labels --jumps --loc] and at least one parameter must be given\n");
     exit(0);
 }
 
@@ -721,40 +809,57 @@ $jump_counter = 0;
 $stats_array = [];
 $label_array = [];
 
-# parsing the input arguments
-if($argc == 1){                 # no arguments, wait for stdin
-    $f = fopen('php://stdin', 'r');
-    if(!$f){
-        fwrite(STDERR, "Error opening file\n");
+
+if($argc != 1){   # tries to find substring in the input arguments
+    if($argv[1] === "--help"){   # help argument
+        if($argc != 2){  # there was help called but also other arguments = error
+            fwrite(STDERR, "Help cannot be combined with any other arguments\n");
+            exit(10);
+        }
+        else{
+            exit(print_help()); # normally prints out help
+        }
     }
-}   # checks whether help was called for
-elseif($argv[1] === "--help"){   # help argument
-    if($argc != 2)  # there was help called but also other arguments = error
-        exit(10);
-    else
-        exit(print_help()); # normally prints out help
-}
-else{   # tries to find substring in the input arguments
+
     if(substr_in_array("--stats=", $argv)){ # we require stats as well
         foreach($argv as $item){            # creates the appropriate string
             if(strpos($item, "--stats=") !== false){
+                if($stats == true){         # check for duplicates
+                    fwrite(STDERR, "Same argument was entered twice\n");
+                    exit(10);
+                }
                 $stats = true;
                 $stats_path = get_path($item);
             }
             elseif(strpos($item, "--loc") !== false){
+                if($loc == true){           # check for duplicates
+                    fwrite(STDERR, "Same argument was entered twice\n");
+                    exit(10);
+                }
                 array_push($stats_array, "--loc");
                 $loc = true;
             }
             elseif(strpos($item, "--comments") !== false){
-                
+                if($comments == true){      # check for duplicates
+                    fwrite(STDERR, "Same argument was entered twice\n");
+                    exit(10);
+                }
                 array_push($stats_array, "--comments");
                 $comments = true;
             }
             elseif(strpos($item, "--labels") !== false){
+                if($labels == true){        # check for duplicates
+                    fwrite(STDERR, "Same argument was entered twice\n");
+                    exit(10);
+                }
                 array_push($stats_array, "--labels");
                 $labels = true;
             }
             elseif(strpos($item, "--jumps") !== false){
+                if($jumps == true){         # check for duplicates
+                    fwrite(STDERR, "Same argument was entered twice\n");
+                    exit(10);
+                }
                 array_push($stats_array, "--jumps");
                 $jumps = true;
             }
@@ -762,6 +867,7 @@ else{   # tries to find substring in the input arguments
                 continue;
             }
             else{
+                fwrite(STDERR, "Invalid input arguments\n");
                 exit(10);
             }
         }
@@ -771,9 +877,17 @@ else{   # tries to find substring in the input arguments
         exit(10);
     }
 }
+# input file
+$f = fopen('php://stdin', 'r');
 
 # check the header
 $fh = fgets($f);
+# comment counter
+if(has_comment($fh)){
+    if($GLOBALS['stats'] and $GLOBALS['comments']){ # stats
+        $GLOBALS['comment_counter']++;
+    }
+}
 $fh = remove_comment($fh);
 $fh = remove_whitespaces($fh);
 $fh = strtolower($fh);
@@ -790,19 +904,23 @@ $instruction_counter = 1;
 
 # reading line by line and processing it
 while(((($line = fgets($f)) != false)) and !feof($f)){
+    # comment counter
+    if(has_comment($line)){
+        if($GLOBALS['stats'] and $GLOBALS['comments']){ # stats
+            $GLOBALS['comment_counter']++;
+        }
+    }
     process_line($line);
 }
 
 # outputs the stats
 if($stats){
     # creates the file if it doesn't exist
-    if(file_exists($stats_path)){
-        $st = fopen($stats_path, 'w');
-    }
-    else{
+    if(!file_exists($stats_path)){
         exec('touch ' . $stats_path);
-        $st = fopen($stats_path, 'w');
     }
+
+    $st = fopen($stats_path, 'w');
     
     # output the appropriate statistics
     foreach($stats_array as $item){
@@ -818,10 +936,6 @@ if($stats){
         }
         elseif(strpos($item, "--jumps") !== false){
             fwrite($st, $GLOBALS['jump_counter']. "\n");
-        }
-        else{
-            print("Error\n");
-            exit(23);
         }
     }
     fclose($st);
