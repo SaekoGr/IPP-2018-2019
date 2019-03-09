@@ -299,8 +299,9 @@ class Tests{
             exec('php7.3 ' . $GLOBALS['parse_script'] . ' < ' . $directory_path . '/' . $file . '.src > tmp_output_test', $exit_array, $exit_code); ### !!!!!!!!!!!! PHPHP VERSION
             if($exit_code == $expected_rc){
                 if($exit_code == 0){    # also check the output
-                    exec('xmldiff tmp_output_test ' . $directory_path . "/" . $file . ".out > tmp_xml_test");
-                    if("\n" == file_get_contents("tmp_xml_test")){
+                    $jxml_path = "/pub/courses/ipp/jexamxml/jexamxml.jar";
+                    exec('java -jar ' .  $jxml_path  . ' tmp_output_test ' . $directory_path . "/" . $file . ".out > tmp_xml_test");
+                    if(self::evaluate_xml_result()){
                         $GLOBALS['passed_counter']++;
                         self::test_result($test_num, $directory_path . "/" . $file, $file, true);
                     }
@@ -374,6 +375,19 @@ class Tests{
             }
             exec("tmp_output_test");
         }
+    }
+
+    # evaluates correct output of xml
+    public static function evaluate_xml_result(){
+        $is_ok = false;
+        $xml_test = fopen("tmp_xml_test", 'r');
+        $line_test = "";
+        while(($line_test = fgets($xml_test)) != false){
+            if($line_test == "Two files are identical" or $line_test == "Two files are identical\n"){
+                $is_ok = true;
+            }
+        }
+        return $is_ok;
     }
 
     # function for concatenating the test result to our html

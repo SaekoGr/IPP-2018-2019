@@ -903,7 +903,7 @@ $xml = prepare_document($xml);
 $instruction_counter = 1;
 
 # reading line by line and processing it
-while(((($line = fgets($f)) != false)) and !feof($f)){
+while(((($line = fgets($f)) != false))){
     # comment counter
     if(has_comment($line)){
         if($GLOBALS['stats'] and $GLOBALS['comments']){ # stats
