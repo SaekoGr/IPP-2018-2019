@@ -127,13 +127,17 @@ class Operand:
                     if "#" in instruction.text:
                         sys.stderr.write("Invalid character\n")
                         sys.exit(32)
-            try:
-                self.value = instruction.text
-                self.frame = None
-                self.name = None
-            except:
-                sys.stderr.write("Invalid instruction operand\n")
-                sys.exit(52)
+            if(self.type == "type" or self.type == "bool" or self.type == "nil" or self.type == "int" or self.type == "string" or self.type == "label"):
+                try:
+                    self.value = instruction.text
+                    self.frame = None
+                    self.name = None
+                except:
+                    sys.stderr.write("Invalid instruction operand\n")
+                    sys.exit(52)
+            else:
+                sys.stderr.write("Invalid XML format\n")
+                sys.exit(32)
 
     # gets the frame
     def get_frame(self, name):  # TODO - try excep - both
@@ -198,11 +202,14 @@ class Interpret:
         # try to parse the language attribute
         try:
             root = tree.getroot()
-            if(root.attrib['language'] != "IPPcode19"):
-                sys.stderr.write("Invalid language\n")
-                sys.exit(52)
+            language = root.attrib['language']
         except:
+            sys.stderr.write("Invalid XML format\n")
             sys.exit(31)
+
+        if(language != "IPPcode19"):
+            sys.stderr.write("Invalid language\n")
+            sys.exit(32)
 
         # basic variables for frames and labels
         self.global_frame = {}
@@ -211,6 +218,7 @@ class Interpret:
         self.labels = {}
         self.root = root
         self.call_stack = []
+        self.can_miss_value = True
 
         # statistics variables
         self.insts = 0
@@ -288,21 +296,23 @@ class Interpret:
             elif(argument.frame == "TF"):   # temporary frame
                 try:
                     self.temporary_frame
-                    if(argument.name not in self.temporary_frame.keys()):
-                        sys.stderr.write("Variable doesn't exist\n")
-                        sys.exit(54)
-                    else:
-                        value = self.temporary_frame[argument.name]
                 except:
                     sys.stderr.write("Frame doesn't exist\n")
                     sys.exit(55)
+
+                if(argument.name not in self.temporary_frame.keys()):
+                    sys.stderr.write("Variable doesn't exist\n")
+                    sys.exit(54)
+                else:
+                        value = self.temporary_frame[argument.name]
             else:
                 sys.stderr.write("Inalid frame type")
                 sys.exit(32)
 
-            if(value == None):
-                sys.stderr.write("Missing value\n")
-                sys.exit(56)
+            if(self.can_miss_value):
+                if(value == None):
+                    sys.stderr.write("Missing value\n")
+                    sys.exit(56)
             return value
         else:                               # return the formatted value
             return self.format_value(argument.value, argument.type)
@@ -412,11 +422,13 @@ class Interpret:
                 sys.exit(54)
         elif(arg.frame == "TF"):
             try:
-                if(arg.name not in self.temporary_frame.keys()):
-                    sys.stderr.write("Variable doesn't exist\n")
-                    sys.exit(54)
+                self.temporary_frame
             except:
+                sys.stderr.write("Frame doesn't exist\n")
                 sys.exit(55)
+            if(arg.name not in self.temporary_frame.keys()):
+                sys.stderr.write("Variable doesn't exist\n")
+                sys.exit(54)
         elif(arg.frame == "LF"):
             if(len(self.local_frames) == 0):
                 sys.stderr.write("Missing frame\n")
@@ -469,12 +481,12 @@ class Interpret:
                 sys.stderr.write("Invalid arguments in xml file\n")
                 sys.exit(32)
             # too many arguments
-                if(len(self.root[op_num].findall("arg1")) != 1):
-                    sys.stderr.write("Invalid arguments in xml file\n")
-                    sys.exit(32)
-                if(len(self.root[op_num].findall("arg2")) != 1):
-                    sys.stderr.write("Invalid arguments in xml file\n")
-                    sys.exit(32)
+            if(len(self.root[op_num].findall("arg1")) != 1):
+                sys.stderr.write("Invalid arguments in xml file\n")
+                sys.exit(32)
+            if(len(self.root[op_num].findall("arg2")) != 1):
+                sys.stderr.write("Invalid arguments in xml file\n")
+                sys.exit(32)
             arg1 = Operand(first_arg)
             arg2 = Operand(second_arg)
         # three arguments
@@ -534,8 +546,13 @@ class Interpret:
             if(arg2.type == "label"):   # cannot move label
                 sys.stderr.write("Label cannot be moved into variable\n")
                 sys.exit(32)
-            value = self.get_argument_value(arg2)               # copy value
             self.check_variable_existence(arg1)
+            if(arg2.type == "var"):
+                self.check_variable_existence(arg2)
+
+            value = self.get_argument_value(arg2)               # copy value
+            if(arg2.type == "var"):
+                self.check_variable_existence(arg2)
             self.insert_to_frame(arg1.name, arg1.frame, value)
             self.counter = self.counter + 1
         # PUSHS <symb>
@@ -560,6 +577,7 @@ class Interpret:
         elif(current_opcode == "ADD"):                          # adds 2 operands
             value_1 = self.get_argument_value(arg2)
             value_2 = self.get_argument_value(arg3)
+            self.check_variable_existence(arg1)
             if(isinstance(value_1, bool) or isinstance(value_2, bool)):
                 sys.stderr.write("Invalid operand types\n")
                 sys.exit(53)
@@ -575,6 +593,7 @@ class Interpret:
         elif(current_opcode == "SUB"):                      # subtracts 2 operands
             value_1 = self.get_argument_value(arg2)
             value_2 = self.get_argument_value(arg3)
+            self.check_variable_existence(arg1)
             if(isinstance(value_1, bool) or isinstance(value_2, bool)):
                 sys.stderr.write("Invalid operand types\n")
                 sys.exit(53)
@@ -590,6 +609,7 @@ class Interpret:
         elif(current_opcode == "MUL"):                      # multiplies 2 oeprands
             value_1 = self.get_argument_value(arg2)
             value_2 = self.get_argument_value(arg3)
+            self.check_variable_existence(arg1)
             if(isinstance(value_1, bool) or isinstance(value_2, bool)):
                 sys.stderr.write("Invalid operand types\n")
                 sys.exit(53)
@@ -605,6 +625,7 @@ class Interpret:
         elif(current_opcode == "IDIV"):                                 # we divide one operand by the other
             value_1 = self.get_argument_value(arg2)
             value_2 = self.get_argument_value(arg3)
+            self.check_variable_existence(arg1)
             if(isinstance(value_1, bool) or isinstance(value_2, bool)):
                 sys.exit(53)
 
@@ -622,6 +643,7 @@ class Interpret:
         elif(current_opcode == "LT"):                       # carries out 'less than' operation for 2 operands
             value_1 = self.get_argument_value(arg2)
             value_2 = self.get_argument_value(arg3)
+            self.check_variable_existence(arg1)
 
             if(type(value_1) != type(value_2)):
                 sys.stderr.write("Invalid operand types\n")
@@ -638,6 +660,7 @@ class Interpret:
         elif(current_opcode == "GT"):                       # carries out 'greater than' operation for 2 operands
             value_1 = self.get_argument_value(arg2)
             value_2 = self.get_argument_value(arg3)
+            self.check_variable_existence(arg1)
 
             if(type(value_1) != type(value_2)):
                 sys.stderr.write("Invalid operand types\n")
@@ -654,6 +677,7 @@ class Interpret:
         elif(current_opcode == "EQ"):                       # carries out 'equal' operation for 2 operands
             value_1 = self.get_argument_value(arg2)
             value_2 = self.get_argument_value(arg3)
+            self.check_variable_existence(arg1)
 
             if(value_1 != "nil" and value_2 != "nil"):
                 if(type(value_1) != type(value_2)):             # we can only compare 2 same types
@@ -675,6 +699,8 @@ class Interpret:
         # INT2CHAR <var> <symb>
         elif(current_opcode == "INT2CHAR"):                 # converts unicode (integer) to char
             value_1 = self.get_argument_value(arg2)
+            self.check_variable_existence(arg1)
+
             try:
                 new_char = chr(value_1)
             except:
@@ -686,6 +712,8 @@ class Interpret:
         elif(current_opcode == "STRI2INT"):                 # get ordinal unicode (integer) number of a character from string at certain index
             string_value = self.get_argument_value(arg2)
             index = self.get_argument_value(arg3)
+            self.check_variable_existence(arg1)
+
             if(isinstance(string_value, str) and isinstance(index, int)):   # first must be string, second one integer
                 try:
                     value = ord(string_value[index])
@@ -699,10 +727,30 @@ class Interpret:
             self.counter = self.counter + 1
         # CONCAT <var> <symb> <symb>
         elif(current_opcode == "CONCAT"):                   # concatenates 2 strings
+            self.can_miss_value = False
             value_1 = self.get_argument_value(arg2)
             value_2 = self.get_argument_value(arg3)
+            self.can_miss_value = True
+            self.check_variable_existence(arg1)
+
+            if(arg2.type == "var"):
+                self.check_variable_existence(arg2)
+                if(value_1 == None):
+                    sys.stderr.write("Invalid work with strings")
+                    sys.exit(56)
+
+            if(arg3.type == "var"):
+                self.check_variable_existence(arg3)
+                if(value_2 == None):
+                    sys.stderr.write("Invalid work with strings")
+                    sys.exit(56)
+
             if(isinstance(value_1, str) and isinstance(value_2, str)):  # both must be string to begin with
                 new_string = value_1 + value_2
+            elif(value_1 == None and isinstance(value_2, str)):         # it can also be empty
+                new_string = value_2
+            elif(value_2 == None and isinstance(value_1, str)):
+                new_string = value_1
             else:
                 sys.stderr.write("Mismatch of types\n")
                 sys.exit(53)
@@ -711,8 +759,13 @@ class Interpret:
         # STRLEN <var> <symb>
         elif(current_opcode == "STRLEN"):                   # get length of the string and saves it into a variable
             string = self.get_argument_value(arg2)
+            self.check_variable_existence(arg1)
+
             if(isinstance(string, str)):                    # it must be string
+                string = self.replace_decimal_escapes(string)
                 length = len(string)
+            elif(string == None):
+                length = 0
             else:
                 sys.stderr.write("Mismatch of types\n")
                 sys.exit(53)
@@ -722,6 +775,8 @@ class Interpret:
         elif(current_opcode == "GETCHAR"):                  # get character from specific index of a string
             string = self.get_argument_value(arg2)
             index = self.get_argument_value(arg3)
+            self.check_variable_existence(arg1)
+
             if(isinstance(string, str) and isinstance(index, int)): # one must be string, the other one is integer
                 try:
                     char = string[index]
@@ -734,9 +789,15 @@ class Interpret:
             self.counter = self.counter + 1
         # SETCHAR <var> <symb> <symb>
         elif(current_opcode == "SETCHAR"):              # sets certain character of a string to given character
+            self.check_variable_existence(arg1)
             string = self.get_argument_value(arg1)
             index = self.get_argument_value(arg2)
             char = self.get_argument_value(arg3)
+
+            if(type(index) != int):                     # index must be a number
+                sys.stderr.write("Mismatch of types\n")
+                sys.exit(53)
+
             if(isinstance(string, str) and string != None):     # check for correct types and their values
                 if(isinstance(char, str) and char != ""):
                     try:
@@ -757,11 +818,15 @@ class Interpret:
             self.counter = self.counter + 1
         # TYPE <var> <symb>
         elif(current_opcode == "TYPE"):                 # gets type of a variables or constant and saves it to variable
+            self.check_variable_existence(arg1)
             variable = self.get_argument_value(arg2)
             if(type(variable) is int):
                 self.insert_to_frame(arg1.name, arg1.frame, "int")
             elif(type(variable) is str):
-                self.insert_to_frame(arg1.name, arg1.frame, "string")
+                if(variable == "nil"):
+                    self.insert_to_frame(arg1.name, arg1.frame, "nil")
+                else:
+                    self.insert_to_frame(arg1.name, arg1.frame, "string")
             elif(type(variable) is bool):
                 self.insert_to_frame(arg1.name, arg1.frame, "bool")
             elif(variable == None):
@@ -788,11 +853,15 @@ class Interpret:
         # EXIT <symb>
         elif(current_opcode == "EXIT"):         # exits with given exit code
             exit_code = int(self.get_argument_value(arg1))
-            if(exit_code >=0 and exit_code <= 49):
-                sys.exit(exit_code)
+            if(arg1.type == "int" or arg1.type == "var"):             # type must be integer
+                if(exit_code >=0 and exit_code <= 49):
+                    sys.exit(exit_code)
+                else:
+                    sys.stderr.write("Invalid exit code\n")
+                    sys.exit(57)
             else:
-                sys.stderr.write("Invalid exit code\n")
-                sys.exit(57)
+                sys.stderr.write("Invalid type of exit code\n")
+                sys.exit(53)
             self.counter = self.counter + 1
         # JUMP <label>
         elif(current_opcode == "JUMP"):         # gets jump destination and changes counter to it
@@ -874,6 +943,8 @@ class Interpret:
         elif(current_opcode == "AND"):          # carries out operation AND for 2 oeprands
             value_1 = self.get_argument_value(arg2)
             value_2 = self.get_argument_value(arg3)
+            self.check_variable_existence(arg1)
+
             if(type(value_1) == bool and type(value_2) == bool):
                 result = (value_1 and value_2)
                 self.insert_to_frame(arg1.name, arg1.frame, result)
@@ -885,6 +956,8 @@ class Interpret:
         elif(current_opcode == "OR"):           # carries out operation OR for 2 oeprands
             value_1 = self.get_argument_value(arg2)
             value_2 = self.get_argument_value(arg3)
+            self.check_variable_existence(arg1)
+
             if(type(value_1) == bool and type(value_2) == bool):
                 result = (value_1 or value_2)
                 self.insert_to_frame(arg1.name, arg1.frame, result)
@@ -895,6 +968,8 @@ class Interpret:
         # NOT <var> <symb>
         elif(current_opcode == "NOT"):      # carries out operation NOT for 1 operand
             value_1 = self.get_argument_value(arg2)
+            self.check_variable_existence(arg1)
+
             if(type(value_1) == bool):
                 result = not value_1
                 self.insert_to_frame(arg1.name, arg1.frame, result)
@@ -904,12 +979,15 @@ class Interpret:
             self.counter = self.counter + 1
         # READ <var> <type>
         elif(current_opcode == "READ"):
+            self.check_variable_existence(arg1)
+            
             if(self.arg.input):         # gets input from file
                 line = self.arg.i_f.readline()
                 try:
                     if(line[len(line) - 1] == '\n'):
                         line = line[:-1]
                     if(arg2.value == "bool"):
+                        line = line.lower()
                         if(line == "true"):
                             line = True
                         elif(line == "false"):
@@ -917,16 +995,17 @@ class Interpret:
                         else:
                             line = False
                     elif(arg2.value == "int"):
-                        if(line.isdigit()):
-                            line = int(line)
-                        else:
-                            line = 0
+                        line = self.check_number(line)
                     elif(arg2.value == "string"):
                         if(isinstance(line, str)):
                             pass
                         else:
                             line = ""
+                    elif(arg2.value == "nil"):
+                        sys.stderr.write("Invalid XML file\n")
+                        sys.exit(32)
                     else:
+                        sys.stderr.write("Invalid operand types\n")
                         sys.exit(53)
                 except:
                     if(arg2.value == "bool"):
@@ -935,11 +1014,16 @@ class Interpret:
                         line = 0
                     elif(arg2.value == "string"):
                         line = ""
+                    elif(arg2.value == "nil"):
+                        sys.stderr.write("Invalid XML file\n")
+                        sys.exit(32)
                     else:
+                        sys.stderr.write("Invalid operand types\n")
                         sys.exit(53)
             else:                   # gets input form the user
                 line = input()
                 if(arg2.value == "bool"):
+                    line = line.lower()
                     if(line == "true"):
                         line = True
                     elif(line == "false"):
@@ -956,7 +1040,11 @@ class Interpret:
                         pass
                     else:
                         line = ""
+                elif(arg2.value == "nil"):
+                    sys.stderr.write("Invalid XML file\n")
+                    sys.exit(32)
                 else:
+                    sys.stderr.write("Invalid operand types\n")
                     sys.exit(53)
             self.insert_to_frame(arg1.name, arg1.frame, line)
             self.counter = self.counter + 1
@@ -999,9 +1087,14 @@ class Interpret:
             self.chceck_available_data_stack(2)
             first_op = self.data_stack[len(self.data_stack) - 1]
             second_op = self.data_stack[len(self.data_stack) - 2]
+            if(type(first_op) == bool or type(second_op) == bool):
+                sys.stderr.write("Invalid types\n")
+                sys.exit(53)
+
             if((not isinstance(first_op, int)) or (not isinstance(second_op, int))):
                 sys.stderr.write("Invalid types\n")
                 sys.exit(53)
+
             multiplication = first_op * second_op
             self.remove_from_stack(2)
             self.data_stack.append(multiplication)  # push it to data stack
@@ -1025,8 +1118,8 @@ class Interpret:
         # LTS
         elif(current_opcode == "LTS"):  # carries out 'less than' operation for 2 operands on data stack
             self.chceck_available_data_stack(2)
-            first_op = self.data_stack[len(self.data_stack) - 1]
-            second_op = self.data_stack[len(self.data_stack) - 2]
+            second_op = self.data_stack[len(self.data_stack) - 1]
+            first_op = self.data_stack[len(self.data_stack) - 2]
             self.remove_from_stack(2)
             if(type(first_op) != type(second_op)):
                 sys.exit(53)
@@ -1039,8 +1132,8 @@ class Interpret:
         # GTS
         elif(current_opcode == "GTS"):  # carries out 'greater than' operation for 2 operands on data stack
             self.chceck_available_data_stack(2)
-            first_op = self.data_stack[len(self.data_stack) - 1]
-            second_op = self.data_stack[len(self.data_stack) - 2]
+            second_op = self.data_stack[len(self.data_stack) - 1]
+            first_op = self.data_stack[len(self.data_stack) - 2]
             self.remove_from_stack(2)
             if(type(first_op) != type(second_op)):
                 sys.stderr.write("Invalid types\n")
@@ -1057,9 +1150,18 @@ class Interpret:
             first_op = self.data_stack[len(self.data_stack) - 1]
             second_op = self.data_stack[len(self.data_stack) - 2]
             self.remove_from_stack(2)
-            if(type(first_op) != type(second_op)):
-                sys.exit(53)
-            if(isinstance(first_op, int) or isinstance(first_op, bool) or isinstance(first_op, str) or isinstance(first_op, None)):
+
+            if(first_op != "nil" and second_op != "nil"):
+                if(type(first_op) != type(second_op)):
+                    sys.stderr.write("Invalid operand types\n")
+                    sys.exit(53)
+            else:
+                if(first_op == "nil"):
+                    first_op = None
+                elif(second_op == "nil"):
+                    second_op = None
+
+            if(isinstance(first_op, int) or isinstance(first_op, bool) or isinstance(first_op, str) or isinstance(first_op, None) or first_op == None):
                 self.data_stack.append(first_op == second_op)   # push it to data stack
             else:
                 sys.stderr.write("Invalid types\n")
@@ -1166,7 +1268,7 @@ class Interpret:
         # statistics for total number of defined variables
         if(self.arg.stats and "--vars" in self.arg.stats_arg):
             self.calculate_defined_variables()
-        self.debug_print()
+        #self.debug_print()
 
     # calculates the maximum number of defined variables
     def calculate_defined_variables(self):
