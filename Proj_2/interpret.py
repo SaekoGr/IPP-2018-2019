@@ -686,7 +686,7 @@ class Interpret:
             else:
                 if(value_1 == "nil"):
                     value_1 = None
-                elif(value_2 == "nil"):
+                if(value_2 == "nil"):
                     value_2 = None
 
             if(isinstance(value_1, int) or isinstance(value_1, bool) or isinstance(value_1, str) or value_1 == None):
@@ -700,6 +700,14 @@ class Interpret:
         elif(current_opcode == "INT2CHAR"):                 # converts unicode (integer) to char
             value_1 = self.get_argument_value(arg2)
             self.check_variable_existence(arg1)
+
+            if(arg2.type == "var"):                         # either variable with int
+                if(type(value_1) != int):
+                    sys.stderr.write("Invalid operand types\n")
+                    sys.exit(53)
+            elif(arg2.type != "int"):                       # or explicitly int
+                sys.stderr.write("Invalid operand types\n")
+                sys.exit(53)
 
             try:
                 new_char = chr(value_1)
@@ -736,13 +744,13 @@ class Interpret:
             if(arg2.type == "var"):
                 self.check_variable_existence(arg2)
                 if(value_1 == None):
-                    sys.stderr.write("Invalid work with strings")
+                    sys.stderr.write("Invalid work with strings\n")
                     sys.exit(56)
 
             if(arg3.type == "var"):
                 self.check_variable_existence(arg3)
                 if(value_2 == None):
-                    sys.stderr.write("Invalid work with strings")
+                    sys.stderr.write("Invalid work with strings\n")
                     sys.exit(56)
 
             if(isinstance(value_1, str) and isinstance(value_2, str)):  # both must be string to begin with
@@ -790,9 +798,15 @@ class Interpret:
         # SETCHAR <var> <symb> <symb>
         elif(current_opcode == "SETCHAR"):              # sets certain character of a string to given character
             self.check_variable_existence(arg1)
+            self.can_miss_value = False
             string = self.get_argument_value(arg1)
             index = self.get_argument_value(arg2)
             char = self.get_argument_value(arg3)
+            self.can_miss_value = True
+
+            if(string == None or index == None or char == None):
+                sys.stderr.write("Invalid work with string\n")
+                sys.exit(58)
 
             if(type(index) != int):                     # index must be a number
                 sys.stderr.write("Mismatch of types\n")
@@ -879,17 +893,29 @@ class Interpret:
         # JUMPIFEQ <label> <symb> <symb>
         elif(current_opcode == "JUMPIFEQ"):
             label = self.get_argument_value(arg1)
+            self.can_miss_value = False
             value_1 = self.get_argument_value(arg2)
             value_2 = self.get_argument_value(arg3)
+            self.can_miss_value = True
 
-            if(type(value_1) != type(value_2)): # must be the same type
-                sys.exit(53)
-
-            if(value_1 == value_2):             # must be the same value to jump
-                jump_destination = self.labels[label]
-                self.counter = int(jump_destination)
+            if(value_1 != "nil" and value_2 != "nil"):
+                if(type(value_1) != type(value_2)): # must be the same type
+                    sys.stderr.write("Mismatch of types\n")
+                    sys.exit(53)
             else:
-                self.counter = self.counter + 1
+                if(value_1 == "nil"):
+                    value_1 = None
+                if(value_2 == "nil"):
+                    value_2 = None
+            if(isinstance(value_1, int) or isinstance(value_1, bool) or isinstance(value_1, str) or value_1 == None):
+                if(value_1 == value_2):             # must be the same value to jump
+                    jump_destination = self.labels[label]
+                    self.counter = int(jump_destination)
+                else:
+                    self.counter = self.counter + 1
+            else:
+                sys.stderr.write("Mismatch of types\n")
+                sys.exit(53)
         # JUMPIFNEQ <label> <symb> <symb>
         elif(current_opcode == "JUMPIFNEQ"):
             label = self.get_argument_value(arg1)
@@ -1158,10 +1184,10 @@ class Interpret:
             else:
                 if(first_op == "nil"):
                     first_op = None
-                elif(second_op == "nil"):
+                if(second_op == "nil"):
                     second_op = None
 
-            if(isinstance(first_op, int) or isinstance(first_op, bool) or isinstance(first_op, str) or isinstance(first_op, None) or first_op == None):
+            if(isinstance(first_op, int) or isinstance(first_op, bool) or isinstance(first_op, str) or first_op == None):
                 self.data_stack.append(first_op == second_op)   # push it to data stack
             else:
                 sys.stderr.write("Invalid types\n")
@@ -1237,14 +1263,26 @@ class Interpret:
             first_op = self.data_stack[len(self.data_stack) - 1]
             second_op = self.data_stack[len(self.data_stack) - 2]
             self.remove_from_stack(2)
-            if(type(first_op) != type(second_op)):
-                sys.stderr.write("Invalid types\n")
-                sys.exit(53)
-            if(first_op == second_op):
-                jump_destination = self.labels[label]       # choose the jump destination
-                self.counter = int(jump_destination)
+
+            if(first_op != "nil" and second_op != "nil"):
+                if(type(first_op) != type(second_op)):
+                    sys.stderr.write("Invalid types\n")
+                    sys.exit(53)
             else:
-                self.counter = self.counter + 1
+                if(first_op == "nil"):
+                    first_op = None
+                if(second_op == "nil"):
+                    second_op = None
+
+            if(isinstance(first_op, int) or isinstance(first_op, bool) or isinstance(first_op, str) or first_op == None):
+                if(first_op == second_op):
+                    jump_destination = self.labels[label]       # choose the jump destination
+                    self.counter = int(jump_destination)
+                else:
+                    self.counter = self.counter + 1
+            else:
+                sys.stderr.write("Mismatch of types\n")
+                sys.exit(53)
         # JUMPIFNEQS
         elif(current_opcode == "JUMPIFNEQS"):   # jumps to given label if 2 top values at data stack are not equal
             label = self.get_argument_value(arg1)
